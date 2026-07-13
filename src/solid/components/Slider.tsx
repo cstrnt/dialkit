@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { animate, motionValue } from 'motion';
 import type { ShortcutConfig } from '../../store/DialStore';
+import type { AnimationHandle } from '../primitives';
 import {
   decimalsForStep,
   roundValue,
@@ -84,16 +85,11 @@ export function Slider(props: SliderProps) {
   let wrapperRect: DOMRect | null = null;
   let scaleVal = 1;
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let snapAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let rubberAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let handleOpacityAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let handleScaleXAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let handleScaleYAnim: any = null;
+  let snapAnim: AnimationHandle | null = null;
+  let rubberAnim: AnimationHandle | null = null;
+  let handleOpacityAnim: AnimationHandle | null = null;
+  let handleScaleXAnim: AnimationHandle | null = null;
+  let handleScaleYAnim: AnimationHandle | null = null;
 
   const positionToValue = (clientX: number) => {
     if (!wrapperRect) return props.value;

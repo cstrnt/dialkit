@@ -1,8 +1,9 @@
-import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
+import { createSignal, createEffect, on, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { getDialKitPortalRoot, getDropdownPosition } from '../../dropdown-position';
 import { ICON_CHEVRON } from '../../icons';
+import { createDropdownDismiss, createDropdownPresence, type AnimationHandle } from '../primitives';
 
 type SelectOption = string | { value: string; label: string };
 
@@ -24,42 +25,38 @@ function normalizeOptions(options: SelectOption[]): { value: string; label: stri
 }
 
 export function SelectControl(props: SelectControlProps) {
-  const [isOpen, setIsOpen] = createSignal(false);
-  const [mounted, setMounted] = createSignal(false);
   const [pos, setPos] = createSignal<{ top: number; left: number; width: number; above: boolean } | null>(null);
   const [portalTarget, setPortalTarget] = createSignal<HTMLElement | null>(null);
   let triggerRef!: HTMLButtonElement;
-  let dropdownRef: HTMLDivElement | undefined;
   let chevronRef!: SVGSVGElement;
-  let closeAnim: any = null;
-  let chevronAnim: any = null;
+  let chevronAnim: AnimationHandle | null = null;
 
   const normalized = () => normalizeOptions(props.options);
   const selectedOption = () => normalized().find((o) => o.value === props.value);
 
+  const dropdown = createDropdownPresence((el, done) =>
+    animate(
+      el,
+      { opacity: 0, y: (pos()?.above ?? false) ? 8 : -8, scale: 0.95 },
+      { type: 'spring', visualDuration: 0.15, bounce: 0, onComplete: done }
+    )
+  );
+
   onMount(() => {
     setPortalTarget(getDialKitPortalRoot(triggerRef) ?? document.body);
-
-    if (chevronRef) {
-      chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
-    }
-
-    onCleanup(() => {
-      closeAnim?.stop();
-      chevronAnim?.stop();
-    });
+    onCleanup(() => chevronAnim?.stop());
   });
 
-  createEffect(() => {
+  // Chevron renders at its resting angle; only animate on changes.
+  createEffect(on(dropdown.isOpen, (open) => {
     if (!chevronRef) return;
-    const open = isOpen();
     chevronAnim?.stop();
     chevronAnim = animate(
       chevronRef,
       { rotate: open ? 180 : 0 },
       { type: 'spring', visualDuration: 0.2, bounce: 0.15 }
     );
-  });
+  }, { defer: true }));
 
   const updatePos = () => {
     const root = portalTarget();
@@ -69,49 +66,15 @@ export function SelectControl(props: SelectControlProps) {
   };
 
   const openDropdown = () => {
-    closeAnim?.stop();
-    closeAnim = null;
     updatePos();
-    setMounted(true);
-    setIsOpen(true);
+    dropdown.open();
   };
 
-  const closeDropdown = () => {
-    setIsOpen(false);
-    if (!dropdownRef) { setMounted(false); return; }
-    const above = pos()?.above ?? false;
-    closeAnim?.stop();
-    closeAnim = animate(
-      dropdownRef,
-      { opacity: 0, y: above ? 8 : -8, scale: 0.95 },
-      { type: 'spring', visualDuration: 0.15, bounce: 0, onComplete: () => { setMounted(false); closeAnim = null; } }
-    );
-  };
-
-  // Close on click outside
-  createEffect(() => {
-    if (!isOpen()) return;
-    const handleViewportChange = () => updatePos();
-
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        triggerRef && !triggerRef.contains(target) &&
-        dropdownRef && !dropdownRef.contains(target)
-      ) {
-        closeDropdown();
-      }
-    };
-
-    updatePos();
-    document.addEventListener('mousedown', handleClick);
-    window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('scroll', handleViewportChange, true);
-    onCleanup(() => {
-      document.removeEventListener('mousedown', handleClick);
-      window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('scroll', handleViewportChange, true);
-    });
+  createDropdownDismiss({
+    isOpen: dropdown.isOpen,
+    contains: (target) => triggerRef?.contains(target) || dropdown.contains(target),
+    onDismiss: dropdown.close,
+    onViewportChange: updatePos,
   });
 
   const dropdownStyle = () => {
@@ -131,8 +94,8 @@ export function SelectControl(props: SelectControlProps) {
       <button
         ref={triggerRef}
         class="dialkit-select-trigger"
-        onClick={() => isOpen() ? closeDropdown() : openDropdown()}
-        data-open={String(isOpen())}
+        onClick={() => dropdown.isOpen() ? dropdown.close() : openDropdown()}
+        data-open={String(dropdown.isOpen())}
       >
         <span class="dialkit-select-label">{props.label}</span>
         <div class="dialkit-select-right">
@@ -154,10 +117,10 @@ export function SelectControl(props: SelectControlProps) {
 
       <Show when={!!portalTarget()}>
         <Portal mount={portalTarget()!}>
-          <Show when={mounted() && pos()}>
+          <Show when={dropdown.mounted() && pos()}>
             <div
               ref={(el) => {
-                dropdownRef = el;
+                dropdown.setRef(el);
                 const above = pos()?.above ?? false;
                 animate(
                   el,
@@ -175,7 +138,7 @@ export function SelectControl(props: SelectControlProps) {
                     data-selected={String(option.value === props.value)}
                     onClick={() => {
                       props.onChange(option.value);
-                      closeDropdown();
+                      dropdown.close();
                     }}
                   >
                     {option.label}

@@ -1,11 +1,12 @@
-import { createSignal, createEffect, onMount, onCleanup, Show, For, JSX } from 'solid-js';
+import { batch, createSignal, createEffect, on, onMount, onCleanup, For } from 'solid-js';
 import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
 import type { ControlMeta, PanelConfig, SpringConfig, DialValue } from '../../store/DialStore';
+import type { AnimationHandle } from '../primitives';
 import { useShortcutContext } from './ShortcutListener';
-import { ShortcutsMenu } from './ShortcutsMenu';
 import { Folder } from './Folder';
+import { RootPanel } from './RootPanel';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
@@ -24,9 +25,7 @@ interface PanelProps {
 
 export function Panel(props: PanelProps) {
   const [copied, setCopied] = createSignal(false);
-  const [isPanelOpen, setIsPanelOpen] = createSignal(props.defaultOpen ?? true);
   const shortcutCtx = useShortcutContext();
-  const hasShortcuts = () => Object.keys(props.panel.shortcuts).length > 0;
   const [values, setValues] = createSignal<Record<string, DialValue>>(
     DialStore.getValues(props.panel.id)
   );
@@ -36,37 +35,21 @@ export function Panel(props: PanelProps) {
   let copyButtonRef!: HTMLButtonElement;
   let copyClipboardIconRef!: HTMLSpanElement;
   let copyCheckIconRef!: HTMLSpanElement;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let addTapAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let copyTapAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let copyClipboardAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let copyCheckAnim: any = null;
-  let didInitCopyIcons = false;
+  let addTapAnim: AnimationHandle | null = null;
+  let copyTapAnim: AnimationHandle | null = null;
+  let copyClipboardAnim: AnimationHandle | null = null;
+  let copyCheckAnim: AnimationHandle | null = null;
 
   const tapTransition = { type: 'spring' as const, visualDuration: 0.15, bounce: 0.3 };
 
   onMount(() => {
     const unsub = DialStore.subscribe(props.panel.id, () => {
-      setValues(DialStore.getValues(props.panel.id));
-      setPresets(DialStore.getPresets(props.panel.id));
-      setActivePresetId(DialStore.getActivePresetId(props.panel.id));
+      batch(() => {
+        setValues(DialStore.getValues(props.panel.id));
+        setPresets(DialStore.getPresets(props.panel.id));
+        setActivePresetId(DialStore.getActivePresetId(props.panel.id));
+      });
     });
-
-    if (copyClipboardIconRef && copyCheckIconRef) {
-      copyClipboardIconRef.style.transformOrigin = '50% 50%';
-      copyClipboardIconRef.style.opacity = '1';
-      copyClipboardIconRef.style.transform = 'scale(1)';
-      copyClipboardIconRef.style.filter = 'blur(0px)';
-      copyCheckIconRef.style.transformOrigin = '50% 50%';
-      copyCheckIconRef.style.opacity = '0';
-      copyCheckIconRef.style.transform = 'scale(0.5)';
-      copyCheckIconRef.style.filter = 'blur(4px)';
-      didInitCopyIcons = true;
-    }
-
     onCleanup(unsub);
   });
 
@@ -83,14 +66,12 @@ export function Panel(props: PanelProps) {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  createEffect(() => {
-    const isCopied = copied();
+  // Icons render with their resting styles inline; only animate on changes.
+  createEffect(on(copied, (isCopied) => {
     if (!copyClipboardIconRef || !copyCheckIconRef) return;
 
     copyClipboardAnim?.stop();
     copyCheckAnim?.stop();
-
-    if (!didInitCopyIcons) return;
 
     const transition = { type: 'spring' as const, visualDuration: 0.3, bounce: 0.2 };
     copyClipboardAnim = animate(copyClipboardIconRef, {
@@ -103,7 +84,7 @@ export function Panel(props: PanelProps) {
       scale: isCopied ? 1 : 0.5,
       filter: isCopied ? 'blur(0px)' : 'blur(4px)',
     }, transition);
-  });
+  }, { defer: true }));
 
   onCleanup(() => {
     addTapAnim?.stop();
@@ -137,7 +118,6 @@ export function Panel(props: PanelProps) {
   };
 
   const handleOpenChange = (open: boolean) => {
-    setIsPanelOpen(open);
     props.onOpenChange?.(open);
   };
 
@@ -287,7 +267,7 @@ export function Panel(props: PanelProps) {
           <span
             ref={copyClipboardIconRef}
             class="dialkit-toolbar-copy-icon"
-            style={{ opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' }}
+            style={{ opacity: 1, transform: 'scale(1)', filter: 'blur(0px)', 'transform-origin': '50% 50%' }}
           >
             <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
               <path d={ICON_CLIPBOARD.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
@@ -298,7 +278,7 @@ export function Panel(props: PanelProps) {
           <span
             ref={copyCheckIconRef}
             class="dialkit-toolbar-copy-icon"
-            style={{ opacity: 0, transform: 'scale(0.5)', filter: 'blur(4px)' }}
+            style={{ opacity: 0, transform: 'scale(0.5)', filter: 'blur(4px)', 'transform-origin': '50% 50%' }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
               <path d={ICON_CHECK} />
@@ -324,9 +304,9 @@ export function Panel(props: PanelProps) {
 
   return (
     <div class="dialkit-panel-wrapper">
-      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} isRoot={true} inline={props.inline ?? false} onOpenChange={handleOpenChange} toolbar={toolbar}>
+      <RootPanel title={props.panel.name} defaultOpen={props.defaultOpen ?? true} inline={props.inline ?? false} onOpenChange={handleOpenChange} toolbar={toolbar}>
         {renderControls()}
-      </Folder>
+      </RootPanel>
     </div>
   );
 }
