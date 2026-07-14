@@ -63,7 +63,7 @@ export default defineConfig([
     },
     splitting: false,
     sourcemap: true,
-    external: ['solid-js', 'solid-js/web', 'motion'],
+    external: ['solid-js', 'solid-js/web', 'solid-js/store', 'motion'],
     tsconfig: 'tsconfig.solid.json',
     esbuildPlugins: [solidPlugin()],
   },

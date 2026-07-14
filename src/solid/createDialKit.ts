@@ -1,4 +1,6 @@
-import { createSignal, createMemo, onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
+import { onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
+import { isServer } from 'solid-js/web';
+import { createStore, reconcile } from 'solid-js/store';
 import { DialStore, flattenDialValueUpdates, resolveDialValues } from '../store/DialStore';
 import type {
   DialConfig,
@@ -41,19 +43,26 @@ export function createDialKitController<T extends DialConfig>(
   const hasStableId = options?.id !== undefined;
   const panelId = options?.id ?? `${name}-${id}`;
 
-  const [flatValues, setFlatValues] = createSignal<Record<string, DialValue>>(
-    DialStore.getValues(panelId)
+  // Resolved values live in a store so consumers reading `values().someKey`
+  // subscribe to that key alone; reconcile diffs each snapshot from the
+  // external DialStore instead of replacing the whole object.
+  const [values, setValues] = createStore(
+    resolveDialValues(config, DialStore.getValues(panelId))
   );
+
+  if (!isServer) {
+    // Subscribe at setup so the notify fired by registerPanel (in onMount)
+    // syncs persisted/preset values into the store without a manual copy.
+    const unsubValues = DialStore.subscribe(panelId, () => {
+      setValues(reconcile(resolveDialValues(config, DialStore.getValues(panelId))));
+    });
+    onCleanup(unsubValues);
+  }
 
   onMount(() => {
     DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
       retainOnUnmount: hasStableId,
       persist: options?.persist,
-    });
-    setFlatValues(DialStore.getValues(panelId));
-
-    const unsubValues = DialStore.subscribe(panelId, () => {
-      setFlatValues(DialStore.getValues(panelId));
     });
 
     const unsubActions = options?.onAction
@@ -61,16 +70,13 @@ export function createDialKitController<T extends DialConfig>(
       : undefined;
 
     onCleanup(() => {
-      unsubValues();
       unsubActions?.();
       DialStore.unregisterPanel(panelId);
     });
   });
 
-  const values = createMemo(() => resolveDialValues(config, flatValues()));
-
   return {
-    values,
+    values: () => values,
     setValue(path, value) {
       DialStore.updateValue(panelId, path, value);
     },
