@@ -284,6 +284,7 @@ function getFirstOptionValue(options: (string | { value: string; label: string }
 
 class DialStoreClass {
   private panels: Map<string, PanelConfig> = new Map();
+  private panelsSnapshot: PanelConfig[] = [];
   private listeners: Map<string, Set<Listener>> = new Map();
   private globalListeners: Set<Listener> = new Set();
   private snapshots: Map<string, Record<string, DialValue>> = new Map();
@@ -496,7 +497,10 @@ class DialStoreClass {
   }
 
   getPanels(): PanelConfig[] {
-    return Array.from(this.panels.values());
+    // Stable reference between global notifications: getSnapshot-style
+    // consumers (React useSyncExternalStore, Solid `from`) compare by
+    // identity, and a fresh array on every call makes them loop or re-render.
+    return this.panelsSnapshot;
   }
 
   getPanel(id: string): PanelConfig | undefined {
@@ -787,6 +791,7 @@ class DialStoreClass {
   }
 
   private notifyGlobal(): void {
+    this.panelsSnapshot = Array.from(this.panels.values());
     this.globalListeners.forEach(fn => fn());
   }
 
