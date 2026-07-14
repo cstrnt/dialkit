@@ -76,17 +76,23 @@ export function SpringVisualization(props: SpringVisualizationProps) {
   };
 
   const gridLines = () => {
-    const lines = [];
+    const lines: ReturnType<typeof createLine>[] = [];
     for (let i = 1; i < 4; i++) {
       const x = (width / 4) * i;
       const y = (height / 4) * i;
       lines.push(
-        <line x1={x} y1={0} x2={x} y2={height} stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />,
-        <line x1={0} y1={y} x2={width} y2={y} stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
+        createLine(x, 0, x, height),
+        createLine(0, y, width, y),
       );
     }
     return lines;
   };
+
+  function createLine(x1: number, y1: number, x2: number, y2: number) {
+    return (
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
+    );
+  }
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} class="dialkit-spring-viz">

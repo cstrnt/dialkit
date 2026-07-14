@@ -1,7 +1,8 @@
-import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+import { createSignal, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { DialStore, ShortcutConfig } from '../../store/DialStore';
+import { createDropdownDismiss, createDropdownPresence, type AnimationHandle } from '../primitives';
 
 interface ShortcutsMenuProps {
   panelId: string;
@@ -27,79 +28,41 @@ function formatInteraction(sc: ShortcutConfig): string {
 }
 
 export function ShortcutsMenu(props: ShortcutsMenuProps) {
-  const [isOpen, setIsOpen] = createSignal(false);
   const [pos, setPos] = createSignal({ top: 0, right: 0 });
 
   let triggerRef!: HTMLButtonElement;
-  let dropdownRef: HTMLDivElement | undefined;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let triggerTapAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let dropdownEnterAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let dropdownExitAnim: any = null;
+  let triggerTapAnim: AnimationHandle | null = null;
 
   const tapTransition = { type: 'spring' as const, visualDuration: 0.15, bounce: 0.3 };
+
+  const dropdown = createDropdownPresence((el, done) =>
+    animate(
+      el,
+      { opacity: 0, y: 4, scale: 0.97 },
+      { type: 'spring', visualDuration: 0.15, bounce: 0, onComplete: done }
+    )
+  );
 
   const open = () => {
     const rect = triggerRef?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
-    setIsOpen(true);
+    dropdown.open();
   };
 
-  const close = () => setIsOpen(false);
-
   const toggle = () => {
-    if (isOpen()) close();
+    if (dropdown.isOpen()) dropdown.close();
     else open();
   };
 
-  // Close on mousedown outside
-  createEffect(() => {
-    if (!isOpen()) return;
-
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (triggerRef?.contains(target) || dropdownRef?.contains(target)) return;
-      close();
-    };
-
-    document.addEventListener('mousedown', handler);
-    onCleanup(() => document.removeEventListener('mousedown', handler));
+  createDropdownDismiss({
+    isOpen: dropdown.isOpen,
+    contains: (target) => triggerRef?.contains(target) || dropdown.contains(target),
+    onDismiss: dropdown.close,
   });
 
-  // Animate dropdown enter/exit
-  createEffect(() => {
-    const opened = isOpen();
-    if (!dropdownRef) return;
-
-    if (opened) {
-      dropdownExitAnim?.stop();
-      dropdownRef.style.pointerEvents = 'auto';
-      dropdownEnterAnim = animate(
-        dropdownRef,
-        { opacity: 1, y: 0, scale: 1 },
-        { type: 'spring', visualDuration: 0.15, bounce: 0 }
-      );
-    } else {
-      dropdownEnterAnim?.stop();
-      dropdownRef.style.pointerEvents = 'none';
-      dropdownExitAnim = animate(
-        dropdownRef,
-        { opacity: 0, y: 4, scale: 0.97 },
-        { type: 'spring', visualDuration: 0.15, bounce: 0 }
-      );
-    }
-  });
-
-  onCleanup(() => {
-    triggerTapAnim?.stop();
-    dropdownEnterAnim?.stop();
-    dropdownExitAnim?.stop();
-  });
+  onCleanup(() => triggerTapAnim?.stop());
 
   const panel = () => DialStore.getPanel(props.panelId);
 
@@ -128,28 +91,21 @@ export function ShortcutsMenu(props: ShortcutsMenuProps) {
     });
   };
 
+  const tapTo = (scale: number) => {
+    triggerTapAnim?.stop();
+    triggerTapAnim = animate(triggerRef, { scale }, tapTransition);
+  };
+
   return (
     <>
       <button
         ref={triggerRef}
         class="dialkit-shortcuts-trigger"
         onClick={toggle}
-        onPointerDown={() => {
-          triggerTapAnim?.stop();
-          triggerTapAnim = animate(triggerRef, { scale: 0.9 }, tapTransition);
-        }}
-        onPointerUp={() => {
-          triggerTapAnim?.stop();
-          triggerTapAnim = animate(triggerRef, { scale: 1 }, tapTransition);
-        }}
-        onPointerCancel={() => {
-          triggerTapAnim?.stop();
-          triggerTapAnim = animate(triggerRef, { scale: 1 }, tapTransition);
-        }}
-        onPointerLeave={() => {
-          triggerTapAnim?.stop();
-          triggerTapAnim = animate(triggerRef, { scale: 1 }, tapTransition);
-        }}
+        onPointerDown={() => tapTo(0.9)}
+        onPointerUp={() => tapTo(1)}
+        onPointerCancel={() => tapTo(1)}
+        onPointerLeave={() => tapTo(1)}
         title="Keyboard shortcuts"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -162,39 +118,42 @@ export function ShortcutsMenu(props: ShortcutsMenuProps) {
         </svg>
       </button>
 
-      <Portal mount={document.body}>
-        <div
-          ref={(el) => {
-            dropdownRef = el;
-            // Initialize hidden
-            el.style.opacity = '0';
-            el.style.transform = 'translateY(4px) scale(0.97)';
-            el.style.pointerEvents = 'none';
-          }}
-          class="dialkit-root dialkit-shortcuts-dropdown"
-          style={{
-            position: 'fixed',
-            top: `${pos().top}px`,
-            right: `${pos().right}px`,
-          }}
-        >
-          <div class="dialkit-shortcuts-title">Keyboard Shortcuts</div>
-          <div class="dialkit-shortcuts-list">
-            <For each={rows()}>
-              {(row) => (
-                <div class="dialkit-shortcuts-row">
-                  <span class="dialkit-shortcuts-row-key">
-                    {formatShortcutKey(row.shortcut)}
-                  </span>
-                  <span class="dialkit-shortcuts-row-label">{row.label}</span>
-                  <span class="dialkit-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
-                </div>
-              )}
-            </For>
+      <Show when={dropdown.mounted()}>
+        <Portal mount={document.body}>
+          <div
+            ref={(el) => {
+              dropdown.setRef(el);
+              animate(
+                el,
+                { opacity: [0, 1], y: [4, 0], scale: [0.97, 1] },
+                { type: 'spring', visualDuration: 0.15, bounce: 0 }
+              );
+            }}
+            class="dialkit-root dialkit-shortcuts-dropdown"
+            style={{
+              position: 'fixed',
+              top: `${pos().top}px`,
+              right: `${pos().right}px`,
+            }}
+          >
+            <div class="dialkit-shortcuts-title">Keyboard Shortcuts</div>
+            <div class="dialkit-shortcuts-list">
+              <For each={rows()}>
+                {(row) => (
+                  <div class="dialkit-shortcuts-row">
+                    <span class="dialkit-shortcuts-row-key">
+                      {formatShortcutKey(row.shortcut)}
+                    </span>
+                    <span class="dialkit-shortcuts-row-label">{row.label}</span>
+                    <span class="dialkit-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
+                  </div>
+                )}
+              </For>
+            </div>
+            <div class="dialkit-shortcuts-hint">See pill badges on controls for keys</div>
           </div>
-          <div class="dialkit-shortcuts-hint">See pill badges on controls for keys</div>
-        </div>
-      </Portal>
+        </Portal>
+      </Show>
     </>
   );
 }

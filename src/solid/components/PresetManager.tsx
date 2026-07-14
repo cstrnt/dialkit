@@ -1,10 +1,11 @@
-import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
+import { createSignal, createEffect, on, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
 import { getDialKitPortalRoot, getDropdownPosition } from '../../dropdown-position';
 import { DialStore } from '../../store/DialStore';
 import type { Preset } from '../../store/DialStore';
+import { createDropdownDismiss, createDropdownPresence, type AnimationHandle } from '../primitives';
 
 interface PresetManagerProps {
   panelId: string;
@@ -14,44 +15,38 @@ interface PresetManagerProps {
 }
 
 export function PresetManager(props: PresetManagerProps) {
-  const [isOpen, setIsOpen] = createSignal(false);
-  const [mounted, setMounted] = createSignal(false);
   const [pos, setPos] = createSignal({ top: 0, left: 0, width: 0 });
   const [portalTarget, setPortalTarget] = createSignal<HTMLElement | null>(null);
   let triggerRef!: HTMLButtonElement;
-  let dropdownRef: HTMLDivElement | undefined;
   let chevronRef!: SVGSVGElement;
-  let closeAnim: any = null;
-  let chevronAnim: any = null;
+  let chevronAnim: AnimationHandle | null = null;
 
   const hasPresets = () => props.presets.length > 0;
   const activePreset = () => props.presets.find((p) => p.id === props.activePresetId);
 
+  const dropdown = createDropdownPresence((el, done) =>
+    animate(
+      el,
+      { opacity: 0, y: 4, scale: 0.97 },
+      { type: 'spring', visualDuration: 0.15, bounce: 0, onComplete: done }
+    )
+  );
+
   onMount(() => {
     setPortalTarget(getDialKitPortalRoot(triggerRef) ?? document.body);
-
-    if (chevronRef) {
-      chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
-      chevronRef.style.opacity = String(hasPresets() ? 0.6 : 0.25);
-    }
-
-    onCleanup(() => {
-      closeAnim?.stop();
-      chevronAnim?.stop();
-    });
+    onCleanup(() => chevronAnim?.stop());
   });
 
-  createEffect(() => {
+  // Renders at its resting state via inline style; animate on changes only.
+  createEffect(on([dropdown.isOpen, hasPresets] as const, ([open, has]) => {
     if (!chevronRef) return;
-    const open = isOpen();
-    const has = hasPresets();
     chevronAnim?.stop();
     chevronAnim = animate(
       chevronRef,
       { rotate: open ? 180 : 0, opacity: has ? 0.6 : 0.25 },
       { type: 'spring', visualDuration: 0.2, bounce: 0.15 }
     );
-  });
+  }, { defer: true }));
 
   const updatePos = () => {
     const root = portalTarget();
@@ -62,49 +57,25 @@ export function PresetManager(props: PresetManagerProps) {
   const openDropdown = () => {
     if (!hasPresets()) return;
     updatePos();
-    closeAnim?.stop();
-    closeAnim = null;
-    setMounted(true);
-    setIsOpen(true);
+    dropdown.open();
   };
 
-  const closeDropdown = () => {
-    setIsOpen(false);
-    if (!dropdownRef) { setMounted(false); return; }
-    closeAnim?.stop();
-    closeAnim = animate(
-      dropdownRef,
-      { opacity: 0, y: 4, scale: 0.97 },
-      { type: 'spring', visualDuration: 0.15, bounce: 0, onComplete: () => { setMounted(false); closeAnim = null; } }
-    );
+  const toggle = () => {
+    if (dropdown.isOpen()) dropdown.close();
+    else openDropdown();
   };
 
-  const toggle = () => { if (isOpen()) closeDropdown(); else openDropdown(); };
-
-  // Close on click outside
-  createEffect(() => {
-    if (!isOpen()) return;
-    const handleViewportChange = () => updatePos();
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (triggerRef?.contains(target) || dropdownRef?.contains(target)) return;
-      closeDropdown();
-    };
-    updatePos();
-    document.addEventListener('mousedown', handler);
-    window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('scroll', handleViewportChange, true);
-    onCleanup(() => {
-      document.removeEventListener('mousedown', handler);
-      window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('scroll', handleViewportChange, true);
-    });
+  createDropdownDismiss({
+    isOpen: dropdown.isOpen,
+    contains: (target) => triggerRef?.contains(target) || dropdown.contains(target),
+    onDismiss: dropdown.close,
+    onViewportChange: updatePos,
   });
 
   const handleSelect = (presetId: string | null) => {
     if (presetId) DialStore.loadPreset(props.panelId, presetId);
     else DialStore.clearActivePreset(props.panelId);
-    closeDropdown();
+    dropdown.close();
   };
 
   const handleDelete = (e: MouseEvent, presetId: string) => {
@@ -118,7 +89,7 @@ export function PresetManager(props: PresetManagerProps) {
         ref={triggerRef}
         class="dialkit-preset-trigger"
         onClick={toggle}
-        data-open={String(isOpen())}
+        data-open={String(dropdown.isOpen())}
         data-has-preset={String(!!activePreset())}
         data-disabled={String(!hasPresets())}
       >
@@ -134,6 +105,7 @@ export function PresetManager(props: PresetManagerProps) {
           stroke-width="2.5"
           stroke-linecap="round"
           stroke-linejoin="round"
+          style={{ opacity: hasPresets() ? 0.6 : 0.25 }}
         >
           <path d={ICON_CHEVRON} />
         </svg>
@@ -141,10 +113,10 @@ export function PresetManager(props: PresetManagerProps) {
 
       <Show when={!!portalTarget()}>
         <Portal mount={portalTarget()!}>
-          <Show when={mounted()}>
+          <Show when={dropdown.mounted()}>
             <div
               ref={(el) => {
-                dropdownRef = el;
+                dropdown.setRef(el);
                 animate(
                   el,
                   { opacity: [0, 1], y: [4, 0], scale: [0.97, 1] },

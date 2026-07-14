@@ -1,9 +1,9 @@
-import { createEffect, createSignal, onCleanup, onMount, Show, For } from 'solid-js';
+import { createSignal, onMount, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { DialStore } from '../../store/DialStore';
-import type { PanelConfig } from '../../store/DialStore';
+import { fromStore } from '../primitives';
 import { ShortcutListener } from './ShortcutListener';
-import { Folder } from './Folder';
+import { RootPanel } from './RootPanel';
 import { Panel } from './Panel';
 import {
   blockPanelDragClick,
@@ -38,8 +38,20 @@ interface DialRootProps {
 }
 
 export function DialRoot(props: DialRootProps) {
-  if ((props.productionEnabled ?? isDevDefault) === false) return null;
-  const [panels, setPanels] = createSignal<PanelConfig[]>([]);
+  const enabled = () => (props.productionEnabled ?? isDevDefault) !== false;
+  return (
+    <Show when={enabled()}>
+      <DialRootInner {...props} />
+    </Show>
+  );
+}
+
+function DialRootInner(props: DialRootProps) {
+  const panels = fromStore(
+    () => DialStore.getPanels(),
+    (notify) => DialStore.subscribeGlobal(notify)
+  );
+  // Hydration gate: server renders nothing, client's first render must match.
   const [mounted, setMounted] = createSignal(false);
   const [dragOffset, setDragOffset] = createSignal<PanelDragOffset | null>(null);
   const [activePosition, setActivePosition] = createSignal<DialPosition>(props.position ?? 'top-right');
@@ -50,58 +62,65 @@ export function DialRoot(props: DialRootProps) {
   let dragStart: PanelDragStart | null = null;
   let didDrag = false;
   let dragTarget: HTMLElement | null = null;
-  let panelOpenStates = new Map<string, boolean>();
-  let rootOpen: boolean | undefined;
 
-  onMount(() => {
-    setMounted(true);
-    setPanels(DialStore.getPanels());
-    const unsub = DialStore.subscribeGlobal(() => {
-      setPanels(DialStore.getPanels());
-    });
-    onCleanup(unsub);
-  });
+  onMount(() => setMounted(true));
 
-  createEffect(() => {
-    const fallbackOpen = inline() || (props.defaultOpen ?? true);
-    const nextStates = new Map<string, boolean>();
-    for (const panel of panels()) {
-      nextStates.set(panel.id, panelOpenStates.get(panel.id) ?? fallbackOpen);
-    }
-    panelOpenStates = nextStates;
-    rootOpen = Array.from(nextStates.values()).some(Boolean);
-  });
+  // Open state is lifted from the panels/root folder via onOpenChange
+  // callbacks (this replaces the old data-collapsed MutationObserver).
+  // Panels that have not reported yet fall back to defaultOpen.
+  const fallbackOpen = () => inline() || (props.defaultOpen ?? true);
+  const panelOpenStates = new Map<string, boolean>();
+  let rootFolderOpen: boolean | undefined;
 
-  createEffect(() => {
-    if (!mounted() || inline() || !panelRef) return;
+  const anyOpen = () => {
+    const list = panels();
+    if (list.length > 1) return rootFolderOpen ?? fallbackOpen();
+    return list.some((panel) => panelOpenStates.get(panel.id) ?? fallbackOpen());
+  };
 
-    const observer = new MutationObserver(() => {
-      const inners = panelRef?.querySelectorAll('.dialkit-panel-inner');
-      if (!inners || inners.length === 0) return;
-      const collapsed = Array.from(inners).every((el) => el.getAttribute('data-collapsed') === 'true');
-      const currentDragOffset = dragOffset();
+  // On collapse/expand: swap the drag offset between the expanded panel and
+  // the collapsed bubble so a dragged bubble returns to where it was left.
+  const applyDragOffsetForOpen = (open: boolean) => {
+    if (inline()) return;
+    const currentDragOffset = dragOffset();
 
-      if (!collapsed) {
-        if (currentDragOffset) {
-          lastDragOffset = currentDragOffset;
-          const bubbleCenterX = currentDragOffset.x + 21;
-          setActivePosition(bubbleCenterX < window.innerWidth / 2 ? 'top-left' : 'top-right');
-        } else {
-          setActivePosition(props.position ?? 'top-right');
-        }
-        setDragOffset(null);
-      } else if (currentDragOffset) {
+    if (open) {
+      if (currentDragOffset) {
         lastDragOffset = currentDragOffset;
-      } else if (lastDragOffset) {
-        setDragOffset(lastDragOffset);
+        const bubbleCenterX = currentDragOffset.x + 21;
+        setActivePosition(bubbleCenterX < window.innerWidth / 2 ? 'top-left' : 'top-right');
+      } else {
+        setActivePosition(props.position ?? 'top-right');
       }
-    });
+      setDragOffset(null);
+    } else if (currentDragOffset) {
+      lastDragOffset = currentDragOffset;
+    } else if (lastDragOffset) {
+      setDragOffset(lastDragOffset);
+    }
+  };
 
-    observer.observe(panelRef, { subtree: true, attributes: true, attributeFilter: ['data-collapsed'] });
-    onCleanup(() => observer.disconnect());
-  });
+  const reactToOpenChange = (before: boolean) => {
+    const after = anyOpen();
+    if (after === before) return;
+    applyDragOffsetForOpen(after);
+    props.onOpenChange?.(after);
+  };
+
+  const handlePanelOpenChange = (panelId: string, open: boolean) => {
+    const before = anyOpen();
+    panelOpenStates.set(panelId, open);
+    reactToOpenChange(before);
+  };
+
+  const handleRootOpenChange = (open: boolean) => {
+    const before = anyOpen();
+    rootFolderOpen = open;
+    reactToOpenChange(before);
+  };
 
   const handlePointerDown = (event: PointerEvent) => {
+    if (inline()) return;
     const panel = panelRef ?? null;
     const handle = getPanelDragHandle(event.target, panel);
     if (!panel || !handle) return;
@@ -142,24 +161,6 @@ export function DialRoot(props: DialRootProps) {
     dragTarget = null;
   };
 
-  const handlePanelOpenChange = (panelId: string, open: boolean) => {
-    panelOpenStates.set(panelId, open);
-    const fallbackOpen = inline() || (props.defaultOpen ?? true);
-    const nextRootOpen = panels().some((panel) => (
-      panelOpenStates.get(panel.id) ?? fallbackOpen
-    ));
-
-    if (rootOpen === nextRootOpen) return;
-    rootOpen = nextRootOpen;
-    props.onOpenChange?.(nextRootOpen);
-  };
-
-  const handleRootOpenChange = (open: boolean) => {
-    if (rootOpen === open) return;
-    rootOpen = open;
-    props.onOpenChange?.(open);
-  };
-
   const dragStyle = () => {
     const offset = dragOffset();
     return offset
@@ -183,10 +184,10 @@ export function DialRoot(props: DialRootProps) {
           data-mode={props.mode ?? 'popover'}
           data-multiple={panels().length > 1 ? 'true' : undefined}
           style={dragStyle()}
-          onPointerDown={!inline() ? handlePointerDown : undefined}
-          onPointerMove={!inline() ? handlePointerMove : undefined}
-          onPointerUp={!inline() ? handlePointerUp : undefined}
-          onPointerCancel={!inline() ? handlePointerUp : undefined}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
         >
           <Show
             when={panels().length > 1}
@@ -195,7 +196,7 @@ export function DialRoot(props: DialRootProps) {
                 {(panel) => (
                   <Panel
                     panel={panel}
-                    defaultOpen={inline() || (props.defaultOpen ?? true)}
+                    defaultOpen={fallbackOpen()}
                     inline={inline()}
                     onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
                   />
@@ -204,10 +205,9 @@ export function DialRoot(props: DialRootProps) {
             }
           >
             <div class="dialkit-panel-wrapper">
-              <Folder
+              <RootPanel
                 title="DialKit"
-                defaultOpen={inline() || (props.defaultOpen ?? true)}
-                isRoot={true}
+                defaultOpen={fallbackOpen()}
                 inline={inline()}
                 onOpenChange={handleRootOpenChange}
                 panelHeightOffset={2}
@@ -221,7 +221,7 @@ export function DialRoot(props: DialRootProps) {
                     />
                   )}
                 </For>
-              </Folder>
+              </RootPanel>
             </div>
           </Show>
         </div>
@@ -230,7 +230,7 @@ export function DialRoot(props: DialRootProps) {
   );
 
   return (
-    <Show when={mounted() && typeof window !== 'undefined' && panels().length > 0}>
+    <Show when={mounted() && panels().length > 0}>
       <Show when={!inline()} fallback={content()}>
         <Portal mount={document.body}>
           {content()}

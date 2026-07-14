@@ -1,6 +1,6 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
 import { DialStore } from '../../store/DialStore';
 import type { SpringConfig } from '../../store/DialStore';
+import { fromStore } from '../primitives';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -15,17 +15,10 @@ interface SpringControlProps {
 }
 
 export function SpringControl(props: SpringControlProps) {
-  const [mode, setMode] = createSignal<'simple' | 'advanced'>(
-    DialStore.getSpringMode(props.panelId, props.path)
+  const mode = fromStore(
+    () => DialStore.getSpringMode(props.panelId, props.path),
+    (notify) => DialStore.subscribe(props.panelId, notify)
   );
-
-  // Subscribe to store changes for mode
-  onMount(() => {
-    const unsub = DialStore.subscribe(props.panelId, () => {
-      setMode(DialStore.getSpringMode(props.panelId, props.path));
-    });
-    onCleanup(unsub);
-  });
 
   const isSimpleMode = () => mode() === 'simple';
 
