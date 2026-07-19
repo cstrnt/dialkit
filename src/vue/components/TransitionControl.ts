@@ -9,6 +9,14 @@ import { EasingVisualization } from './EasingVisualization';
 
 type CurveMode = 'easing' | 'simple' | 'advanced';
 
+export interface TransitionDurationControl {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
 function formatEase(ease: [number, number, number, number]): string {
   return ease.map((value) => Number(value.toFixed(2))).join(', ');
 }
@@ -82,6 +90,8 @@ export const TransitionControl = defineComponent({
       type: Object as PropType<TransitionConfig>,
       required: true,
     },
+    hideDuration: { type: Boolean, default: false },
+    durationControl: Object as PropType<TransitionDurationControl>,
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -155,6 +165,20 @@ export const TransitionControl = defineComponent({
       const isSimpleSpring = mode.value === 'simple';
       const currentSpring = spring();
       const currentEasing = easing();
+      const durationSlider = !props.hideDuration && (isEasing || isSimpleSpring)
+        ? h(Slider, {
+          label: 'Duration',
+          value: props.durationControl?.value ?? (isEasing ? currentEasing.duration : currentSpring.visualDuration ?? 0.3),
+          min: props.durationControl?.min ?? 0.1,
+          max: props.durationControl?.max ?? (isEasing ? 2 : 1),
+          step: props.durationControl?.step ?? 0.05,
+          unit: 's',
+          onChange: props.durationControl?.onChange ?? ((next: number) => {
+            if (isEasing) emit('change', { ...currentEasing, duration: next });
+            else handleSpringUpdate('visualDuration', next);
+          }),
+        })
+        : null;
 
       return h(Folder, { title: props.label, defaultOpen: true }, {
         default: () => [
@@ -180,15 +204,6 @@ export const TransitionControl = defineComponent({
                 h(Slider, { label: 'y1', value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(1, next) }),
                 h(Slider, { label: 'x2', value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next: number) => updateEase(2, next) }),
                 h(Slider, { label: 'y2', value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(3, next) }),
-                h(Slider, {
-                  label: 'Duration',
-                  value: currentEasing.duration,
-                  min: 0.1,
-                  max: 2,
-                  step: 0.05,
-                  unit: 's',
-                  onChange: (next: number) => emit('change', { ...currentEasing, duration: next }),
-                }),
                 h(EaseTextInput, {
                   ease: currentEasing.ease,
                   onChange: (next: [number, number, number, number]) => emit('change', { ...currentEasing, ease: next }),
@@ -196,15 +211,6 @@ export const TransitionControl = defineComponent({
               ]
               : isSimpleSpring
                 ? [
-                  h(Slider, {
-                    label: 'Duration',
-                    value: currentSpring.visualDuration ?? 0.3,
-                    min: 0.1,
-                    max: 1,
-                    step: 0.05,
-                    unit: 's',
-                    onChange: (next: number) => handleSpringUpdate('visualDuration', next),
-                  }),
                   h(Slider, {
                     label: 'Bounce',
                     value: currentSpring.bounce ?? 0.2,
@@ -240,6 +246,7 @@ export const TransitionControl = defineComponent({
                     onChange: (next: number) => handleSpringUpdate('mass', next),
                   }),
                 ]),
+            durationSlider,
           ]),
         ],
       });

@@ -9,12 +9,22 @@
 
   type CurveMode = 'easing' | 'simple' | 'advanced';
 
-  let { panelId, path, label, value, onChange } = $props<{
+  export type TransitionDurationControl = {
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+  };
+
+  let { panelId, path, label, value, onChange, hideDuration = false, durationControl } = $props<{
     panelId: string;
     path: string;
     label: string;
     value: TransitionConfig;
     onChange: (value: TransitionConfig) => void;
+    hideDuration?: boolean;
+    durationControl?: TransitionDurationControl;
   }>();
 
   let mode = $state<CurveMode>(DialStore.getTransitionMode(panelId, path));
@@ -136,7 +146,6 @@
       <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
       <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
       <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
-      <Slider label="Duration" value={easing.duration} onChange={(v) => onChange({ ...easing, duration: v })} min={0.1} max={2} step={0.05} unit="s" />
 
       <div class="dialkit-labeled-control">
         <span class="dialkit-labeled-control-label">Ease</span>
@@ -156,15 +165,6 @@
         />
       </div>
     {:else if isSimpleSpring}
-      <Slider
-        label="Duration"
-        value={spring.visualDuration ?? 0.3}
-        onChange={(v) => handleSpringUpdate('visualDuration', v)}
-        min={0.1}
-        max={1}
-        step={0.05}
-        unit="s"
-      />
       <Slider
         label="Bounce"
         value={spring.bounce ?? 0.2}
@@ -197,6 +197,21 @@
         min={0.1}
         max={10}
         step={0.1}
+      />
+    {/if}
+
+    {#if !hideDuration && (isEasing || isSimpleSpring)}
+      <Slider
+        label="Duration"
+        value={durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? 0.3)}
+        onChange={durationControl?.onChange ?? ((next) => {
+          if (isEasing) onChange({ ...easing, duration: next });
+          else handleSpringUpdate('visualDuration', next);
+        })}
+        min={durationControl?.min ?? 0.1}
+        max={durationControl?.max ?? (isEasing ? 2 : 1)}
+        step={durationControl?.step ?? 0.05}
+        unit="s"
       />
     {/if}
   </div>

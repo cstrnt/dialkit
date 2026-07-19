@@ -1,9 +1,12 @@
 import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, Teleport } from 'vue';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig } from '../../store/DialStore';
+import { TimelineStore } from '../../store/TimelineStore';
+import type { TimelineMeta } from '../../store/TimelineStore';
 import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
+import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
 import {
   blockPanelDragClick,
   getPanelDragHandle,
@@ -54,11 +57,13 @@ export const DialRoot = defineComponent({
   emits: ['openChange'],
   setup(props, { emit }) {
     const panels = ref<PanelConfig[]>([]);
+    const timelines = ref<TimelineMeta[]>([]);
     const mounted = ref(false);
     const panelRef = ref<HTMLDivElement | null>(null);
     const dragOffset = ref<PanelDragOffset | null>(null);
     const activePosition = ref<DialPosition>(props.position);
-    let unsubscribe: (() => void) | undefined;
+    let unsubscribePanels: (() => void) | undefined;
+    let unsubscribeTimelines: (() => void) | undefined;
     let observer: MutationObserver | undefined;
     let lastDragOffset: PanelDragOffset | null = null;
     let dragging = false;
@@ -177,19 +182,70 @@ export const DialRoot = defineComponent({
 
     onMounted(() => {
       mounted.value = true;
-      panels.value = DialStore.getPanels();
+      panels.value = DialStore.getPanels('panel');
+      timelines.value = TimelineStore.getTimelines();
       syncPanelOpenStates();
-      unsubscribe = DialStore.subscribeGlobal(() => {
-        panels.value = DialStore.getPanels();
+      unsubscribePanels = DialStore.subscribeGlobal(() => {
+        panels.value = DialStore.getPanels('panel');
         syncPanelOpenStates();
+      });
+      unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
+        timelines.value = TimelineStore.getTimelines();
       });
       nextTick(connectObserver);
     });
 
     onUnmounted(() => {
-      unsubscribe?.();
+      unsubscribePanels?.();
+      unsubscribeTimelines?.();
       observer?.disconnect();
     });
+
+    const timelineToggle = () => timelines.value.length > 0 ? h(TimelineToggleButton) : null;
+
+    const renderPanels = () => {
+      if (panels.value.length === 0) {
+        return [h('div', { class: 'dialkit-panel-wrapper' }, [
+          h(Folder, {
+            title: 'DialKit',
+            defaultOpen: props.mode === 'inline' || props.defaultOpen,
+            isRoot: true,
+            inline: props.mode === 'inline',
+            toolbar: timelineToggle,
+            onOpenChange: handleRootOpenChange,
+            panelHeightOffset: 2,
+          }, { default: () => [h('div', { class: 'dialkit-timeline-toolkit-only' }, 'Timeline')] }),
+        ])];
+      }
+      if (panels.value.length > 1) {
+        return [h('div', { class: 'dialkit-panel-wrapper' }, [
+          h(Folder, {
+            title: 'DialKit',
+            defaultOpen: props.mode === 'inline' || props.defaultOpen,
+            isRoot: true,
+            inline: props.mode === 'inline',
+            toolbar: timelineToggle,
+            onOpenChange: handleRootOpenChange,
+            panelHeightOffset: 2,
+          }, {
+            default: () => panels.value.map((panel) => h(Panel, {
+              key: panel.id,
+              panel,
+              defaultOpen: true,
+              variant: 'section',
+            })),
+          }),
+        ])];
+      }
+      return panels.value.map((panel) => h(Panel, {
+        key: panel.id,
+        panel,
+        defaultOpen: props.mode === 'inline' || props.defaultOpen,
+        inline: props.mode === 'inline',
+        toolbarExtra: timelineToggle,
+        onOpenChange: (open: boolean) => handlePanelOpenChange(panel.id, open),
+      }));
+    };
 
     const renderContent = () => h(ShortcutListener, null, {
       default: () => h('div', { class: 'dialkit-root', 'data-mode': props.mode, 'data-theme': props.theme }, [
@@ -208,38 +264,12 @@ export const DialRoot = defineComponent({
           onPointermove: props.mode === 'inline' ? undefined : handlePointerMove,
           onPointerup: props.mode === 'inline' ? undefined : handlePointerUp,
           onPointercancel: props.mode === 'inline' ? undefined : handlePointerUp,
-        }, panels.value.length > 1
-          ? [
-            h('div', { class: 'dialkit-panel-wrapper' }, [
-              h(Folder, {
-                title: 'DialKit',
-                defaultOpen: props.mode === 'inline' || props.defaultOpen,
-                isRoot: true,
-                inline: props.mode === 'inline',
-                onOpenChange: handleRootOpenChange,
-                panelHeightOffset: 2,
-              }, {
-                default: () => panels.value.map((panel) => h(Panel, {
-                  key: panel.id,
-                  panel,
-                  defaultOpen: true,
-                  variant: 'section',
-                })),
-              }),
-            ]),
-          ]
-          : panels.value.map((panel) => h(Panel, {
-            key: panel.id,
-            panel,
-            defaultOpen: props.mode === 'inline' || props.defaultOpen,
-            inline: props.mode === 'inline',
-            onOpenChange: (open: boolean) => handlePanelOpenChange(panel.id, open),
-          }))),
+        }, renderPanels()),
       ]),
     });
 
     return () => {
-      if (!props.productionEnabled || !mounted.value || typeof window === 'undefined' || panels.value.length === 0) {
+      if (!props.productionEnabled || !mounted.value || typeof window === 'undefined' || (panels.value.length === 0 && timelines.value.length === 0)) {
         return null;
       }
 

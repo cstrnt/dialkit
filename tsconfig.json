@@ -16,7 +16,8 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "dialkit/store": ["src/store/DialStore.ts"]
+      "dialkit/store": ["src/store/DialStore.ts"],
+      "dialkit/timeline": ["src/timeline/index.ts"]
     }
   },
   "include": [

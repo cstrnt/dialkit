@@ -1,10 +1,12 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { DialStore } from '../../store/DialStore';
+import { TimelineStore } from '../../store/TimelineStore';
 import { fromStore } from '../primitives';
 import { ShortcutListener } from './ShortcutListener';
 import { RootPanel } from './RootPanel';
 import { Panel } from './Panel';
+import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
 import {
   blockPanelDragClick,
   getPanelDragHandle,
@@ -48,8 +50,12 @@ export function DialRoot(props: DialRootProps) {
 
 function DialRootInner(props: DialRootProps) {
   const panels = fromStore(
-    () => DialStore.getPanels(),
+    () => DialStore.getPanels('panel'),
     (notify) => DialStore.subscribeGlobal(notify)
+  );
+  const timelines = fromStore(
+    () => TimelineStore.getTimelines(),
+    (notify) => TimelineStore.subscribeGlobal(notify)
   );
   // Hydration gate: server renders nothing, client's first render must match.
   const [mounted, setMounted] = createSignal(false);
@@ -173,6 +179,12 @@ function DialRootInner(props: DialRootProps) {
       : undefined;
   };
 
+  const timelineToggle = () => (
+    <Show when={timelines().length > 0}>
+      <TimelineToggleButton />
+    </Show>
+  );
+
   const content = () => (
     <ShortcutListener>
       <div class="dialkit-root" data-mode={props.mode ?? 'popover'} data-theme={props.theme ?? 'system'}>
@@ -189,40 +201,57 @@ function DialRootInner(props: DialRootProps) {
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
         >
-          <Show
-            when={panels().length > 1}
-            fallback={
-              <For each={panels()}>
-                {(panel) => (
-                  <Panel
-                    panel={panel}
-                    defaultOpen={fallbackOpen()}
-                    inline={inline()}
-                    onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
-                  />
-                )}
-              </For>
-            }
-          >
+          <Show when={panels().length > 0} fallback={
             <div class="dialkit-panel-wrapper">
               <RootPanel
                 title="DialKit"
                 defaultOpen={fallbackOpen()}
                 inline={inline()}
                 onOpenChange={handleRootOpenChange}
+                toolbar={timelineToggle()}
                 panelHeightOffset={2}
               >
-                <For each={panels()}>
-                  {(panel) => (
-                    <Panel
-                      panel={panel}
-                      defaultOpen={true}
-                      variant="section"
-                    />
-                  )}
-                </For>
+                <div class="dialkit-timeline-toolkit-only">Timeline</div>
               </RootPanel>
             </div>
+          }>
+            <Show
+              when={panels().length > 1}
+              fallback={
+              <For each={panels()}>
+                {(panel) => (
+                  <Panel
+                    panel={panel}
+                    defaultOpen={fallbackOpen()}
+                    inline={inline()}
+                    toolbarExtra={timelineToggle()}
+                    onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+                  />
+                )}
+              </For>
+              }
+            >
+              <div class="dialkit-panel-wrapper">
+                <RootPanel
+                  title="DialKit"
+                  defaultOpen={fallbackOpen()}
+                  inline={inline()}
+                  onOpenChange={handleRootOpenChange}
+                  toolbar={timelineToggle()}
+                  panelHeightOffset={2}
+                >
+                  <For each={panels()}>
+                    {(panel) => (
+                      <Panel
+                        panel={panel}
+                        defaultOpen={true}
+                        variant="section"
+                      />
+                    )}
+                  </For>
+                </RootPanel>
+              </div>
+            </Show>
           </Show>
         </div>
       </div>
@@ -230,7 +259,7 @@ function DialRootInner(props: DialRootProps) {
   );
 
   return (
-    <Show when={mounted() && panels().length > 0}>
+    <Show when={mounted() && (panels().length > 0 || timelines().length > 0)}>
       <Show when={!inline()} fallback={content()}>
         <Portal mount={document.body}>
           {content()}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { DialStore, flattenDialValueUpdates, resolveDialValues } from '../store/DialStore';
 import type {
   DialConfig,
@@ -8,6 +8,7 @@ import type {
   ResolvedValues,
   ShortcutConfig,
 } from '../store/DialStore';
+import { useDialStorePanel } from './useDialStorePanel';
 
 export interface UseDialOptions {
   id?: string;
@@ -37,43 +38,16 @@ export function useDialKitController<T extends DialConfig>(
   config: T,
   options?: UseDialOptions
 ): DialKitController<T> {
-  const instanceId = useId();
-  const hasStableId = options?.id !== undefined;
-  const panelId = options?.id ?? `${name}-${instanceId}`;
+  const { panelId, flatValues, serializedConfig } = useDialStorePanel(name, config, {
+    id: options?.id,
+    persist: options?.persist,
+    shortcuts: options?.shortcuts,
+  });
+
   const configRef = useRef(config);
-  const serializedConfig = JSON.stringify(config);
   configRef.current = config;
   const onActionRef = useRef(options?.onAction);
   onActionRef.current = options?.onAction;
-  const shortcutsRef = useRef(options?.shortcuts);
-  shortcutsRef.current = options?.shortcuts;
-  const persistRef = useRef(options?.persist);
-  persistRef.current = options?.persist;
-  const serializedShortcuts = JSON.stringify(options?.shortcuts);
-  const serializedPersist = JSON.stringify(options?.persist);
-
-  // Register panel on mount
-  useEffect(() => {
-    DialStore.registerPanel(panelId, name, configRef.current, shortcutsRef.current, {
-      retainOnUnmount: hasStableId,
-      persist: persistRef.current,
-    });
-    return () => DialStore.unregisterPanel(panelId);
-  }, [hasStableId, panelId, name]);
-
-  // Update panel when config structure or shortcuts change
-  const mountedRef = useRef(false);
-  useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      return;
-    }
-    DialStore.updatePanel(panelId, name, configRef.current, shortcutsRef.current, {
-      retainOnUnmount: hasStableId,
-      persist: persistRef.current,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist]);
 
   // Subscribe to action events
   useEffect(() => {
@@ -82,19 +56,9 @@ export function useDialKitController<T extends DialConfig>(
     });
   }, [panelId]);
 
-  const subscribe = useCallback(
-    (callback: () => void) => DialStore.subscribe(panelId, callback),
-    [panelId]
-  );
-  const getSnapshot = useCallback(
-    () => DialStore.getValues(panelId),
-    [panelId]
-  );
-
-  // DialStore.getValues returns a stable empty object when panel is not registered.
-  const flatValues = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const values = useMemo(
     () => resolveDialValues(configRef.current, flatValues),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [flatValues, serializedConfig]
   );
 

@@ -6,7 +6,36 @@ export type { DialKitController, UseDialOptions } from './hooks/useDialKit';
 export { DialRoot } from './components/DialRoot';
 export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
+// Timeline (prototype)
+export { useDialTimeline } from './hooks/useDialTimeline';
+export type {
+  TimelineClipConfig,
+  TimelineClipCss,
+  TimelineClipLoop,
+  TimelineConfig,
+  TimelineClipValues,
+  TimelineGroupConfig,
+  TimelineGroupValues,
+  TimelinePropConfig,
+  TimelinePropStepConfig,
+  TimelineStepConfig,
+  TimelineStepValues,
+  DialTimelineValues,
+  UseDialTimelineOptions,
+} from './hooks/useDialTimeline';
+export { DialTimeline } from './components/Timeline/DialTimeline';
+export type { DialTimelineProps } from './components/Timeline/DialTimeline';
+export { formatClock } from './timeline-core';
+export { TimelineStore } from './store/TimelineStore';
+export type {
+  TimelineMeta,
+  TimelineClipMeta,
+  TimelineClipTrackMeta,
+  TimelineTransport,
+} from './store/TimelineStore';
+
 // Individual components (for advanced usage)
+export { ControlRenderer } from './components/ControlRenderer';
 export { Slider } from './components/Slider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';

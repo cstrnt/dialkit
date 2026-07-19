@@ -1,10 +1,13 @@
 <script lang="ts">
   import { DialStore } from 'dialkit/store';
   import type { PanelConfig } from 'dialkit/store';
+  import { TimelineStore } from 'dialkit/timeline';
+  import type { TimelineMeta } from 'dialkit/timeline';
   import { themeCSS } from '../theme-css';
   import Portal from '../Portal.svelte';
   import Folder from './Folder.svelte';
   import Panel from './Panel.svelte';
+  import TimelineToggleButton from './Timeline/TimelineToggleButton.svelte';
   import ShortcutListener from './ShortcutListener.svelte';
   import {
     blockPanelDragClick,
@@ -41,6 +44,7 @@
   const inline = $derived(mode === 'inline');
 
   let panels = $state<PanelConfig[]>([]);
+  let timelines = $state<TimelineMeta[]>([]);
   let mounted = $state(false);
   let panelRef = $state<HTMLDivElement>();
   let dragOffset = $state<PanelDragOffset | null>(null);
@@ -75,13 +79,20 @@
     if (typeof window === 'undefined') return;
 
     mounted = true;
-    panels = DialStore.getPanels();
+    panels = DialStore.getPanels('panel');
+    timelines = TimelineStore.getTimelines();
 
-    const unsub = DialStore.subscribeGlobal(() => {
-      panels = DialStore.getPanels();
+    const unsubscribePanels = DialStore.subscribeGlobal(() => {
+      panels = DialStore.getPanels('panel');
+    });
+    const unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
+      timelines = TimelineStore.getTimelines();
     });
 
-    return unsub;
+    return () => {
+      unsubscribePanels();
+      unsubscribeTimelines();
+    };
   });
 
   $effect(() => {
@@ -183,7 +194,13 @@
 
 </script>
 
-{#if productionEnabled && mounted && panels.length > 0}
+{#snippet timelineToolbar()}
+  {#if timelines.length > 0}
+    <TimelineToggleButton />
+  {/if}
+{/snippet}
+
+{#if productionEnabled && mounted && (panels.length > 0 || timelines.length > 0)}
   {#snippet content()}
     <ShortcutListener>
       <div class="dialkit-root" data-mode={mode} data-theme={theme}>
@@ -200,7 +217,7 @@
           onpointerup={!inline ? handlePointerUp : undefined}
           onpointercancel={!inline ? handlePointerUp : undefined}
         >
-          {#if panels.length > 1}
+          {#if panels.length === 0}
             <div class="dialkit-panel-wrapper">
               <Folder
                 title="DialKit"
@@ -210,6 +227,25 @@
                 onOpenChange={handleRootOpenChange}
                 panelHeightOffset={2}
               >
+                {#snippet toolbar()}
+                  {@render timelineToolbar()}
+                {/snippet}
+                <div class="dialkit-timeline-toolkit-only">Timeline</div>
+              </Folder>
+            </div>
+          {:else if panels.length > 1}
+            <div class="dialkit-panel-wrapper">
+              <Folder
+                title="DialKit"
+                defaultOpen={inline || defaultOpen}
+                isRoot={true}
+                {inline}
+                onOpenChange={handleRootOpenChange}
+                panelHeightOffset={2}
+              >
+                {#snippet toolbar()}
+                  {@render timelineToolbar()}
+                {/snippet}
                 {#each panels as panel (panel.id)}
                   <Panel
                     {panel}
@@ -225,6 +261,7 @@
                 {panel}
                 defaultOpen={inline || defaultOpen}
                 {inline}
+                toolbarExtra={timelineToolbar}
                 onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
               />
             {/each}

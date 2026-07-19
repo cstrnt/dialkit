@@ -2,7 +2,7 @@
 
 <img src="https://joshpuckett.me/images/dialkit.png" width="100%" />
 
-Real-time parameter tweaking for React, Solid, Svelte, and Vue, created by Josh Puckett.
+Real-time parameter tweaking for React, Solid, Svelte, and Vue, created by Josh Puckett. Now with a scrubbable animation [Timeline](#timeline).
 
 To learn more about how I use DialKit, and approach design in general, feel free to check out [Interface Craft](http://interfacecraft.dev/).
 
@@ -386,6 +386,7 @@ const values = useDialKit('Controls', {
 | `position` | `'top-right' \| 'top-left' \| 'bottom-right' \| 'bottom-left'` | `'top-right'` |
 | `defaultOpen` | `boolean` | `true` |
 | `mode` | `'popover' \| 'inline'` | `'popover'` |
+| `theme` | `'system' \| 'light' \| 'dark'` | `'system'` |
 | `productionEnabled` | `boolean` | `false` in production, `true` otherwise |
 | `onOpenChange` | `(open: boolean) => void` | `undefined` |
 
@@ -621,6 +622,350 @@ function PhotoStack() {
 
 ---
 
+## Timeline
+
+DialKit Timeline lets you define an animation in code, preview it, and tune its timing, values, and curves in a visual timeline.
+
+The animation's structure stays in code. The timeline editor adjusts its properties without changing which clips loop, which clips form sequences, or how your application combines them.
+
+Timeline is available in React, Solid, Svelte, and Vue. Every adapter uses the same framework-neutral timeline core and store, while lifecycle and rendering stay native to its framework.
+
+```tsx
+import { useDialTimeline, DialTimeline } from 'dialkit';
+import 'dialkit/styles.css';
+
+function Hero() {
+  const hero = useDialTimeline(
+    'Hero',
+    {
+      entrance: {
+        at: 0,
+        duration: 0.6,
+        from: { y: 32, opacity: 0 },
+        to: { y: 0, opacity: 1 },
+        transition: { type: 'spring', bounce: 0.2 },
+      },
+      idle: {
+        at: 0.8,
+        loop: true,
+        from: { y: 0 },
+        steps: [
+          { duration: 1, to: { y: -6 } },
+          { duration: 1, to: { y: 0 } },
+        ],
+      },
+    },
+    { loop: { from: 0.8 } }
+  );
+
+  const entrance = hero.entrance.current;
+  const idle = hero.idle.current;
+
+  return (
+    <>
+      <h1 style={{
+        opacity: entrance.opacity,
+        transform: `translateY(${entrance.y + idle.y}px)`,
+      }}>
+        Ship the moment.
+      </h1>
+      <DialTimeline />
+    </>
+  );
+}
+```
+
+Each named entry is a clip and appears as one row in the timeline. During authoring, bind its `current` values to your UI so the element always matches the playhead, whether the timeline is playing, paused, or being scrubbed. `current` is DialKit's deterministic preview of the configured curve; after tuning, Copy the settings into your app's real animation and remove the timeline hook.
+
+The framework entry points expose the same config, values, transport, and `<DialTimeline />` dock:
+
+| Framework | Import | Timeline function | Read returned values |
+|-----------|--------|-------------------|----------------------|
+| React | `dialkit` | `useDialTimeline` | `timeline.card.current` |
+| Solid | `dialkit/solid` | `createDialTimeline` | `timeline().card.current` |
+| Svelte 5 | `dialkit/svelte` | `createDialTimeline` | `timeline.card.current` |
+| Vue 3 | `dialkit/vue` | `useDialTimeline` | `timeline.value.card.current` in script; auto-unwrapped in templates |
+
+### Timeline function
+
+```tsx
+const tl = useDialTimeline(name, config, options?)
+// Solid/Svelte: createDialTimeline(name, config, options?)
+```
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Timeline title displayed in the dock |
+| `config` | `TimelineConfig` | Clip definitions plus an optional top-level `duration` |
+| `options.id` | `string` | Stable logical id, same semantics as `useDialKit` |
+| `options.persist` | `DialKitPersistOptions` | Persist timing edits to browser storage |
+| `options.autoplay` | `boolean` | Start playing on mount. Default `true` |
+| `options.loop` | `boolean \| { from: number }` | Wrap the playhead when it reaches the end (see [Looping](#looping)) |
+
+Clip timing lives in the same store as panel values, so presets, persistence, reset, and Copy all work on timing data with no extra wiring.
+
+The returned object combines the transport with one entry per clip:
+
+```tsx
+tl.time        // playhead in seconds
+tl.playing     // boolean
+tl.duration    // timeline length in seconds
+tl.play()      // resume (restarts if parked at the end)
+tl.pause()
+tl.replay()    // seek to 0 and play
+tl.seek(1.2)   // move the playhead (pins the deterministic first-pass state)
+
+tl.headline    // TimelineClipValues for the "headline" clip
+```
+
+`time`, `playing`, `duration`, `play`, `pause`, `replay`, and `seek` are reserved — a clip with one of those names is skipped with a console warning.
+
+### Clips
+
+- Use `from` and `to` for one animation from one state to another.
+- Use `steps` for several states played sequentially.
+- Use `props` when properties need independent timing.
+- Use separate named clips for separate behaviors, even when they affect the same element.
+
+DialKit does not inspect your rendered elements or automatically combine animations. Your application decides how the values from different clips are used.
+
+Every clip requires `at`, which sets its start time:
+
+```tsx
+card: {
+  at: 0.45,                                   // start time in seconds
+  duration: 0.7,                              // bar length in seconds
+  from: { y: 44, scale: 0.95, opacity: 0 },   // any DialKit leaf values
+  to: { y: 0, scale: 1, opacity: 1 },
+  transition: { type: 'spring', bounce: 0.25 },
+}
+```
+
+- **`from` / `to`** accept any normal DialKit leaf values — numbers, hex colors — and become editable controls in the clip's popover. Bare numbers get property-aware slider ranges (`x`/`y` ±100, `rotate` ±180, `scale` 0–2, `opacity` 0–1, and so on), expanded to include your actual endpoints.
+- **`transition`** is a spring or easing config, exactly as in the panel's spring editor. Clips with `from`/`to` and no `transition` animate with a default spring (`{ type: 'spring', bounce: 0.2 }`).
+- **The bar owns the duration.** Time-based springs and easings stretch to the bar: resize the clip and the curve retimes. Physics springs (`stiffness`/`damping`/`mass`) work the other way — the duration is *derived* from their settle time, the bar shows `~0.62s`, and it can't be resized (change the physics instead).
+- **`duration` may be omitted** — it defaults to the easing's duration or the spring's settle time; a `from`/`to` clip with no `transition` gets the default spring's settle time.
+
+Config mistakes warn in the console instead of failing silently: an entry missing `at`, conflicting clip shapes (`steps` + `to`, `props` + `from`), or a sequence property with no starting value.
+
+A clip with only `at` (and optionally `duration`) is a **marker**: it carries timing state (`started`, `active`, `progress`) but no values. Useful for driving custom effects off `progress`:
+
+```tsx
+shine: { at: 2.7, duration: 0.7 },
+
+// later
+<div style={{ transform: `translateX(${-150 + tl.shine.progress * 400}%)` }} />
+```
+
+### Reading clip state
+
+Each clip on the returned object is a `TimelineClipValues`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `at` | `number` | Clip start in seconds — live, reflects dock edits |
+| `duration` | `number` | Effective duration — the bar length |
+| `loop` | `'off' \| 'repeat'` | Effective loop mode |
+| `started` | `boolean` | Playhead is at or past the clip start |
+| `active` | `boolean` | Playhead is inside the clip (any cycle, for looping clips) |
+| `done` | `boolean` | Playhead is past the clip end (past the timeline end, for looping clips) |
+| `progress` | `number` | 0–1 position within the clip — a sawtooth per cycle for looping clips |
+| `step` | `number` | Index of the leg under the playhead (sequence clips only) |
+| `from` / `to` | `object` | Resolved endpoint values (`to` is the final merged state for sequences) |
+| `animate` | `object` | `to` once the clip has started, `from` before |
+| `transition` | `TransitionConfig` | Motion-ready curve, duration driven by the bar (single-curve clips only) |
+| `css` | `TimelineClipCss` | `transitionDuration` + `transitionTimingFunction` (single-curve clips only) |
+| `current` | `object` | Values interpolated through the clip's curves at the playhead |
+
+### Recommended workflow: preview, copy, replace
+
+The intended workflow is:
+
+1. **Author with `current`.** Bind `clip.current` directly to the element while tuning. DialKit deterministically samples the configured spring or easing curve, which makes every intermediate state scrubbable.
+2. **Copy the tuned settings.** Copy exports the timings, values, and transition parameters you arrived at in the dock.
+3. **Move those settings into the real app animation.** Apply the copied transition to your normal Motion animation (or your production animation system), then remove `useDialTimeline`/`createDialTimeline` and `<DialTimeline />`. Motion now runs its real spring at runtime.
+
+Hiding or removing only `<DialTimeline />` hides the editor UI; it does **not** change how the animation is rendered. As long as the component is reading `clip.current`, DialKit's sampled values are still driving it.
+
+The sampler uses the damped-spring equation with the configured stiffness, damping, and mass, plus a Motion-compatible mapping for `visualDuration` and `bounce`. It is designed to closely preview the final motion, but it is not a guarantee of frame-for-frame identity with Motion's runtime implementation.
+
+There are three ways to bind a clip while authoring:
+
+**1. `current` — recommended for tuning.** Bind styles directly; the element sits at DialKit's sampled state at all times, giving you true scrubbing. DialKit remains the renderer until you replace this binding with your production animation.
+
+```tsx
+<div style={{
+  opacity: tl.card.current.opacity,
+  transform: `translateY(${tl.card.current.y}px) scale(${tl.card.current.scale})`,
+}} />
+```
+
+**2. `animate` + `transition` — real Motion during authoring.** The clip start flips `animate` from `from` to `to`, so Motion runs the actual curve. The tradeoff is that timeline scrubbing snaps between endpoints instead of showing intermediate states.
+
+```tsx
+<motion.div animate={tl.card.animate} transition={tl.card.transition} />
+```
+
+**3. `animate` + `css` — native CSS during authoring.** Same endpoint flip, using a CSS transition. Easing curves map exactly; springs are approximated with an overshoot bezier, and scrubbing still snaps between endpoints.
+
+```tsx
+<div style={{
+  opacity: tl.card.animate.opacity,
+  transform: `translateY(${tl.card.animate.y}px)`,
+  transitionProperty: 'transform, opacity',
+  ...tl.card.css,
+}} />
+```
+
+### Sequences — `steps`
+
+A clip can explicitly chain several sequential legs with a `steps` array. Each array item becomes one segment on the same row; drag a boundary to retime a leg, or click a segment to edit its target values and curve (the first leg's popover also shows the clip's `from`). DialKit does not infer steps from the DOM element consuming the values, from the number of animated properties, or from multiple clips affecting the same element.
+
+```tsx
+path: {
+  at: 0,
+  from: { x: -70, y: 0 },
+  transition: { type: 'easing', duration: 0.8, ease: [0.65, 0, 0.35, 1] },
+  steps: [
+    { duration: 0.8, to: { x: 0, y: 36 } },
+    { duration: 0.8, to: { x: 70, y: 0 } },
+    { duration: 0.8, to: { x: -70 } },   // y untouched — holds at 0
+  ],
+},
+```
+
+- **The hold rule:** each leg animates only the properties named in its `to`; everything else holds its value from the previous leg. In the example, leg 3 moves `x` while `y` stays where leg 2 left it.
+- Use separate named clips when an element has separate behaviors, such as a one-shot entrance plus an idle animation. They remain separate rows even when the element combines both outputs.
+- **Declare every animated property in `from`.** The sequence's `current` merges all legs from that starting state — a property with no initial value has nothing to hold or interpolate from before its first leg.
+- Each leg takes its own `transition`; legs without one inherit the clip's `transition` (or the default spring).
+- The clip's duration is the sum of its legs — there's no separate duration to edit.
+- `tl.path.step` reports the index of the leg under the playhead.
+
+### Property tracks — `props`
+
+When one element's properties need *independent* timing — different durations, different curves, offset phases — give each property a full track:
+
+```tsx
+float: {
+  at: 0,
+  loop: true,
+  props: {
+    y: {
+      from: -9,
+      transition: { type: 'easing', duration: 0.6, ease: [0.45, 0, 0.55, 1] },
+      steps: [
+        { duration: 0.6, to: 9 },
+        { duration: 0.6, to: -9 },
+      ],
+    },
+    scale: {
+      from: 0.94,
+      delay: 0.12,   // starts 120ms behind y — a phase offset
+      transition: { type: 'easing', duration: 0.6, ease: [0.8, 0, 0.2, 1] },
+      steps: [
+        { duration: 0.6, to: 1.06 },
+        { duration: 0.6, to: 0.94 },
+      ],
+    },
+  },
+},
+```
+
+Each track is a mini-clip: its own `from`/`to` or `steps`, `duration`, `transition`, and a `delay` offset from the clip's `at`. In the dock, the clip's row is a read-only composite bar — click it to expand one full row per track, where everything is editable and dragging a track's bar adjusts its phase. When the clip loops, each track folds against its own cycle length, so tracks with different periods drift in and out of phase like real oscillators.
+
+`props` is mutually exclusive with `from`/`to`/`steps` on the same clip. Track names that collide with clip fields (`at`, `duration`, `loop`, `from`, `to`, `transition`, `delay`, `stepN`) are skipped with a warning. Properties that share timing belong in a plain `from`/`to` or `steps` clip instead.
+
+### Layers — nested groups
+
+Nesting clips one level under a key groups them into a collapsible layer in the dock. Purely presentational — values nest the same way:
+
+```tsx
+const tl = useDialTimeline('Compound', {
+  circle: {
+    path:  { at: 0, /* ... */ },
+    float: { at: 0, /* ... */ },
+  },
+});
+
+tl.circle.path.current
+tl.circle.float.current
+```
+
+### Looping
+
+There are two loop controls, and they compose:
+
+**Clip loop** — `loop: true` on a clip repeats its cycle from `at` until the timeline ends. The bar is one cycle, so dragging it longer slows the loop. Looping is code-defined rather than editable in the dock. There is no mirror mode — a loop that should return home (a bob, a pulse) is a sequence whose last leg lands back on the starting values, which also puts the loop seam at a natural zero-velocity point.
+
+**Timeline loop** — the `loop` option wraps the *playhead*:
+
+```tsx
+useDialTimeline('Hero', config, { loop: true });           // wrap to 0
+useDialTimeline('Hero', config, { loop: { from: 1.4 } });  // wrap to 1.4s
+```
+
+`{ from }` is the intro-then-idle pattern: clips before that time play exactly once, and looping clips inside the region keep cycling with continuous phase — no snap at the wrap. Scrubbing always pins the deterministic first-pass state.
+
+**Event-driven timelines** — pass `autoplay: false` and drive the transport from your app. The dock and your code share the same clock: click your real button, watch the playhead run, scrub back, tune, click again.
+
+```tsx
+const toast = useDialTimeline('Toast', config, { autoplay: false });
+
+<button onClick={() => toast.replay()}>Save changes</button>
+```
+
+### Timeline duration
+
+The top-level `duration` is the minimum editing window. Omit it and DialKit initially infers an exact fit to the last clip's end. If a live edit—such as switching to a longer physics spring—would move content past that boundary, DialKit extends the timeline automatically. Set `duration` explicitly when you want deliberate slack; authored content is never clipped to fit it.
+
+```tsx
+const tl = useDialTimeline('Hero', {
+  duration: 4,          // seconds; minimum window, inferred when omitted
+  headline: { at: 0.45, /* ... */ },
+});
+```
+
+### The dock — `<DialTimeline />`
+
+Mount once, anywhere. The dock renders fixed to the bottom of the screen via a portal and shows every registered timeline as a section, mirroring how `<DialRoot />` collects panels. It renders nothing until a timeline registers, and like `DialRoot` it's hidden in production builds.
+
+```tsx
+<DialTimeline theme="dark" />
+```
+
+| Prop | Type | Default |
+|------|------|---------|
+| `theme` | `'system' \| 'light' \| 'dark'` | `'system'` |
+| `defaultVisible` | `boolean` | `true` |
+| `visible` | `boolean` | uncontrolled |
+| `onVisibilityChange` | `(visible: boolean) => void` | `undefined` |
+| `defaultOpen` | `boolean` | `true` |
+| `productionEnabled` | `boolean` | `false` in production, `true` otherwise |
+
+Each section's toolbar has **Play/Pause**, **Add Version**, a version selector, **Copy**, and a collapse chevron. The collapsed toolbar stays playable and keeps its full-range overview scrubber, so you can inspect the animation without opening the detailed tracks.
+
+When `DialRoot` and `DialTimeline` are mounted together, the panel header gets a timeline icon that hides or shows the entire dock. Visibility never changes playback, and showing the dock restores each section's previous collapsed or expanded state. Use `visible` and `onVisibilityChange` when the host app needs to control or persist this state.
+
+In the grid:
+
+- **Scrub the full timeline** by dragging the compact toolbar overview — playback pauses while you drag and resumes on release.
+- **Zoom the timescale** by holding Option/Alt while dragging left or right on the expanded seconds ruler. The gesture zooms around the point where it began. Hold Shift and drag to reset to the full view; dragging without a modifier seeks directly.
+- **Drag a clip** to move it in time; **drag its edges** to resize (the transition retimes with it).
+- **Drag a segment boundary** on a sequence to resize the leg on its left; the overall clip grows or shrinks with it.
+- **Click a clip** to open its popover — the same DialKit controls (including values, color pickers, and the spring/easing curve editor) scoped to that clip's values. Time-based transitions expose their duration there, and track popovers expose track delay. Click a segment to edit one leg.
+- **Click a props clip's composite bar** to expand its tracks into full editable rows; drag a track's bar to phase-shift it.
+- Physics-spring clips show `~` before their derived duration and resize via their popover physics instead of their edges.
+
+Clip names are labels only. Editors open from clips and segments in the timeline.
+
+**Copy** exports the current timing values as an agent-ready instruction — tuned `at`s, durations, curves, and values, normalized so defaults and editor-only fields don't add noise. Physics springs include their effective settled duration. The instruction tells the agent to keep `clip.current` during authoring and add a `TODO(production)` comment beside the hook. That breadcrumb explains that the sampled bindings must eventually be replaced with real Motion animations before `useDialTimeline` and `<DialTimeline />` are removed; hiding the dock alone leaves `clip.current` rendering in place.
+
+`DialRoot` and `DialTimeline` are independent: use both together (panels for styling, timeline for timing), or the dock alone. Timeline-backed panels don't appear in `DialRoot`.
+
+`formatClock(seconds, tenths?)` is exported for rendering `mm:ss` / `mm:ss.t` readouts in your own UI.
+
+---
+
 ## Solid
 
 DialKit also works with Solid. Import from `dialkit/solid` instead of `dialkit` — the API mirrors the React version, with `createDialKit` replacing `useDialKit` and `DialRoot` as a Solid component.
@@ -670,6 +1015,28 @@ function Card() {
 ```
 
 `createDialKit` returns an accessor — call `params()` to read the current values. All control types, config shapes, and panel features (presets, copy, folders, and `DialRoot` props like `onOpenChange`) work identically to the React version.
+
+Solid timelines use the same accessor shape:
+
+```tsx
+import { createDialTimeline, DialTimeline } from 'dialkit/solid';
+
+function Hero() {
+  const timeline = createDialTimeline('Hero', {
+    entrance: {
+      at: 0,
+      duration: 0.6,
+      from: { y: 32, opacity: 0 },
+      to: { y: 0, opacity: 1 },
+    },
+  });
+
+  return <>
+    <h1 style={{ opacity: timeline().entrance.current.opacity }}>Ship it.</h1>
+    <DialTimeline />
+  </>;
+}
+```
 
 Use `createDialKitController` when Solid code needs to update values:
 
@@ -726,6 +1093,26 @@ npm install dialkit
 ```
 
 `createDialKit` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `DialRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, transitions, and `DialRoot` props like `onOpenChange` match the React/Solid entries.
+
+Svelte timelines are reactive objects too:
+
+```svelte
+<script>
+  import { createDialTimeline, DialTimeline } from 'dialkit/svelte';
+
+  const timeline = createDialTimeline('Hero', {
+    entrance: {
+      at: 0,
+      duration: 0.6,
+      from: { y: 32, opacity: 0 },
+      to: { y: 0, opacity: 1 }
+    }
+  });
+</script>
+
+<h1 style:opacity={timeline.entrance.current.opacity}>Ship it.</h1>
+<DialTimeline />
+```
 
 Use `createDialKitController` when Svelte code needs to update values:
 
@@ -811,6 +1198,28 @@ const params = useDialKit('Card', {
 
 `useDialKit` returns a reactive object. All control types, presets, folders, keyboard shortcuts, and transitions work identically to the other frameworks.
 
+Vue timelines return a computed ref, which templates unwrap automatically:
+
+```vue
+<script setup>
+import { useDialTimeline, DialTimeline } from 'dialkit/vue';
+
+const timeline = useDialTimeline('Hero', {
+  entrance: {
+    at: 0,
+    duration: 0.6,
+    from: { y: 32, opacity: 0 },
+    to: { y: 0, opacity: 1 },
+  },
+});
+</script>
+
+<template>
+  <h1 :style="{ opacity: timeline.entrance.current.opacity }">Ship it.</h1>
+  <DialTimeline />
+</template>
+```
+
 Use `useDialKitController` when Vue code needs to update values:
 
 ```vue
@@ -858,7 +1267,28 @@ import type {
 } from 'dialkit';
 ```
 
-Return values are fully typed: `params.blur` infers as `number`, `params.color` as `string`, `params.spring` as `SpringConfig`, `params.shadow` as a nested object, etc.
+Timeline types are exported as well:
+
+```tsx
+import type {
+  TimelineConfig,
+  TimelineClipConfig,
+  TimelineClipValues,
+  TimelineClipCss,
+  TimelineClipLoop,
+  TimelineGroupConfig,
+  TimelineGroupValues,
+  TimelinePropConfig,
+  TimelinePropStepConfig,
+  TimelineStepConfig,
+  TimelineStepValues,
+  DialTimelineValues,
+  UseDialTimelineOptions,
+  DialTimelineProps,
+} from 'dialkit';
+```
+
+Return values are fully typed: `params.blur` infers as `number`, `params.color` as `string`, `params.spring` as `SpringConfig`, `params.shadow` as a nested object, etc. Timeline values are typed from the config shape too — `tl.card.current.y` infers as `number`, and `step` only exists on sequence clips.
 
 ---
 

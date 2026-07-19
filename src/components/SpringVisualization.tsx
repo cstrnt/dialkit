@@ -1,65 +1,28 @@
 import { SpringConfig } from '../store/DialStore';
+import { springParams, springProgress } from '../transition-math';
 
 interface SpringVisualizationProps {
   spring: SpringConfig;
   isSimpleMode: boolean;
 }
 
-function generateSpringCurve(
-  stiffness: number,
-  damping: number,
-  mass: number,
-  duration: number
-): [number, number][] {
-  const points: [number, number][] = [];
-  const steps = 100;
-  const dt = duration / steps;
-
-  let position = 0;
-  let velocity = 0;
-  const target = 1;
-
-  for (let i = 0; i <= steps; i++) {
-    const time = i * dt;
-    points.push([time, position]);
-
-    const springForce = -stiffness * (position - target);
-    const dampingForce = -damping * velocity;
-    const acceleration = (springForce + dampingForce) / mass;
-
-    velocity += acceleration * dt;
-    position += velocity * dt;
-  }
-
-  return points;
-}
-
 export function SpringVisualization({ spring, isSimpleMode }: SpringVisualizationProps) {
   const width = 256;
   const height = 140;
 
-  let stiffness: number;
-  let damping: number;
-  let mass: number;
-
-  if (isSimpleMode) {
-    const visualDuration = spring.visualDuration ?? 0.3;
-    const bounce = spring.bounce ?? 0.2;
-    mass = 1;
-
-    stiffness = (2 * Math.PI) / visualDuration;
-    stiffness = Math.pow(stiffness, 2);
-
-    const dampingRatio = 1 - bounce;
-    damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
-  } else {
-    stiffness = spring.stiffness ?? 400;
-    damping = spring.damping ?? 17;
-    mass = spring.mass ?? 1;
-  }
+  // Same param mapping and closed-form curve as timeline scrubbing, so the
+  // preview shows exactly the physics that plays.
+  const params = isSimpleMode
+    ? springParams({ type: 'spring', visualDuration: spring.visualDuration ?? 0.3, bounce: spring.bounce ?? 0.2 })
+    : springParams({ type: 'spring', stiffness: spring.stiffness ?? 400, damping: spring.damping ?? 17, mass: spring.mass ?? 1 });
 
   const duration = 2;
-  const points = generateSpringCurve(stiffness, damping, mass, duration);
+  const steps = 100;
+  const points: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const time = (i / steps) * duration;
+    points.push([time, springProgress(time, params)]);
+  }
 
   const values = points.map(([, value]) => value);
   const minValue = Math.min(...values);

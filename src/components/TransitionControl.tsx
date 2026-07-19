@@ -12,11 +12,29 @@ interface TransitionControlProps {
   label: string;
   value: TransitionConfig;
   onChange: (value: TransitionConfig) => void;
+  /** Hide duration sliders when something else owns the duration (e.g. a timeline clip bar). */
+  hideDuration?: boolean;
+  /** Route duration edits through an external owner while keeping this control's layout. */
+  durationControl?: {
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+  };
 }
 
 type CurveMode = 'easing' | 'simple' | 'advanced';
 
-export function TransitionControl({ panelId, path, label, value, onChange }: TransitionControlProps) {
+export function TransitionControl({
+  panelId,
+  path,
+  label,
+  value,
+  onChange,
+  hideDuration = false,
+  durationControl,
+}: TransitionControlProps) {
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),
     [panelId]
@@ -81,6 +99,21 @@ export function TransitionControl({ panelId, path, label, value, onChange }: Tra
     onChange({ ...easing, ease: newEase });
   };
 
+  const durationSlider = !hideDuration && (isEasing || isSimpleSpring) ? (
+    <Slider
+      label="Duration"
+      value={durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? 0.3)}
+      onChange={durationControl?.onChange ?? ((next) => {
+        if (isEasing) onChange({ ...easing, duration: next });
+        else handleSpringUpdate('visualDuration', next);
+      })}
+      min={durationControl?.min ?? 0.1}
+      max={durationControl?.max ?? (isEasing ? 2 : 1)}
+      step={durationControl?.step ?? 0.05}
+      unit="s"
+    />
+  ) : null;
+
   return (
     <Folder title={label} defaultOpen={true}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -109,14 +142,10 @@ export function TransitionControl({ panelId, path, label, value, onChange }: Tra
             <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
             <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
             <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
-            <Slider label="Duration" value={easing.duration} onChange={(v) => onChange({ ...easing, duration: v })} min={0.1} max={2} step={0.05} unit="s" />
             <EaseTextInput ease={easing.ease} onChange={(newEase) => onChange({ ...easing, ease: newEase })} />
           </>
         ) : isSimpleSpring ? (
-          <>
-            <Slider label="Duration" value={spring.visualDuration ?? 0.3} onChange={(v) => handleSpringUpdate('visualDuration', v)} min={0.1} max={1} step={0.05} unit="s" />
-            <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
-          </>
+          <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
         ) : (
           <>
             <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} />
@@ -124,6 +153,7 @@ export function TransitionControl({ panelId, path, label, value, onChange }: Tra
             <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} />
           </>
         )}
+        {durationSlider}
       </div>
     </Folder>
   );

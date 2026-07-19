@@ -1,4 +1,4 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
+import { defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_CHEVRON, ICON_PANEL } from '../../icons';
 
@@ -10,7 +10,7 @@ export const Folder = defineComponent({
     isRoot: { type: Boolean, default: false },
     inline: { type: Boolean, default: false },
     toolbar: {
-      type: null as unknown as PropType<(() => ReturnType<typeof h>) | null>,
+      type: null as unknown as PropType<(() => VNodeChild) | null>,
       required: false,
       default: null,
     },

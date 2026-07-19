@@ -1,8 +1,8 @@
-import { batch, createSignal, createEffect, on, onMount, onCleanup, For } from 'solid-js';
+import { batch, createSignal, createEffect, on, onMount, onCleanup, For, type JSX } from 'solid-js';
 import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, PanelConfig, SpringConfig, DialValue } from '../../store/DialStore';
+import type { ControlMeta, PanelConfig, SpringConfig, TransitionConfig, DialValue } from '../../store/DialStore';
 import type { AnimationHandle } from '../primitives';
 import { useShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
@@ -10,6 +10,7 @@ import { RootPanel } from './RootPanel';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
+import { TransitionControl } from './TransitionControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
@@ -21,6 +22,7 @@ interface PanelProps {
   inline?: boolean;
   onOpenChange?: (open: boolean) => void;
   variant?: 'root' | 'section';
+  toolbarExtra?: JSX.Element;
 }
 
 export function Panel(props: PanelProps) {
@@ -161,6 +163,17 @@ export function Panel(props: PanelProps) {
           />
         );
 
+      case 'transition':
+        return (
+          <TransitionControl
+            panelId={props.panel.id}
+            path={control.path}
+            label={control.label}
+            value={value() as TransitionConfig}
+            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
+          />
+        );
+
       case 'folder':
         return (
           <Folder title={control.label} defaultOpen={control.defaultOpen ?? true}>
@@ -287,6 +300,8 @@ export function Panel(props: PanelProps) {
         </span>
         Copy
       </button>
+
+      {props.toolbarExtra}
 
     </>
   );

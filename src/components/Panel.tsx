@@ -1,17 +1,12 @@
-import { useCallback, useContext, useState, useSyncExternalStore } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
+import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig } from '../store/DialStore';
-import { ShortcutContext } from './ShortcutListener';
+import { DialStore, PanelConfig } from '../store/DialStore';
+import { buildCopyInstruction } from '../copy-instruction';
 import { ShortcutsMenu } from './ShortcutsMenu';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
+import { ControlRenderer } from './ControlRenderer';
 import { Folder } from './Folder';
-import { Slider } from './Slider';
-import { Toggle } from './Toggle';
-import { SpringControl } from './SpringControl';
-import { TransitionControl } from './TransitionControl';
-import { TextControl } from './TextControl';
-import { SelectControl } from './SelectControl';
-import { ColorControl } from './ColorControl';
 import { PresetManager } from './PresetManager';
 
 interface PanelProps {
@@ -20,12 +15,12 @@ interface PanelProps {
   inline?: boolean;
   onOpenChange?: (open: boolean) => void;
   variant?: 'root' | 'section';
+  toolbarExtra?: ReactNode;
 }
 
-export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root' }: PanelProps) {
+export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root', toolbarExtra }: PanelProps) {
   const [copied, setCopied] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
-  const shortcutCtx = useContext(ShortcutContext);
   const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panel.id, callback),
@@ -48,17 +43,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
   };
 
   const handleCopy = () => {
-    const jsonStr = JSON.stringify(values, null, 2);
-
-    const instruction = `Update the useDialKit configuration for "${panel.name}" with these values:
-
-\`\`\`json
-${jsonStr}
-\`\`\`
-
-Apply these values as the new defaults in the useDialKit call.`;
-
-    navigator.clipboard.writeText(instruction);
+    navigator.clipboard.writeText(buildCopyInstruction('useDialKit', panel.name, values));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -68,119 +53,9 @@ Apply these values as the new defaults in the useDialKit call.`;
     onOpenChange?.(open);
   }, [onOpenChange]);
 
-  const renderControl = (control: ControlMeta) => {
-    const value = values[control.path];
-
-    switch (control.type) {
-      case 'slider':
-        return (
-          <Slider
-            key={control.path}
-            label={control.label}
-            value={value as number}
-            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
-            min={control.min}
-            max={control.max}
-            step={control.step}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx.activePanelId === panel.id && shortcutCtx.activePath === control.path}
-          />
-        );
-
-      case 'toggle':
-        return (
-          <Toggle
-            key={control.path}
-            label={control.label}
-            checked={value as boolean}
-            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx.activePanelId === panel.id && shortcutCtx.activePath === control.path}
-          />
-        );
-
-      case 'spring':
-        return (
-          <SpringControl
-            key={control.path}
-            panelId={panel.id}
-            path={control.path}
-            label={control.label}
-            spring={value as SpringConfig}
-            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
-          />
-        );
-
-      case 'transition':
-        return (
-          <TransitionControl
-            key={control.path}
-            panelId={panel.id}
-            path={control.path}
-            label={control.label}
-            value={value as TransitionConfig}
-            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
-          />
-        );
-
-      case 'folder':
-        return (
-          <Folder key={control.path} title={control.label} defaultOpen={control.defaultOpen ?? true}>
-            {control.children?.map(renderControl)}
-          </Folder>
-        );
-
-      case 'text':
-        return (
-          <TextControl
-            key={control.path}
-            label={control.label}
-            value={value as string}
-            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
-            placeholder={control.placeholder}
-          />
-        );
-
-      case 'select':
-        return (
-          <SelectControl
-            key={control.path}
-            label={control.label}
-            value={value as string}
-            options={control.options ?? []}
-            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
-          />
-        );
-
-      case 'color':
-        return (
-          <ColorControl
-            key={control.path}
-            label={control.label}
-            value={value as string}
-            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
-          />
-        );
-
-      case 'action':
-        return (
-          <button
-            key={control.path}
-            className="dialkit-button"
-            onClick={() => DialStore.triggerAction(panel.id, control.path)}
-          >
-            {control.label}
-          </button>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  const renderControls = () => {
-    return panel.controls.map(renderControl);
-  };
+  const renderControls = () => (
+    <ControlRenderer panelId={panel.id} controls={panel.controls} values={values} />
+  );
 
   const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
 
@@ -253,6 +128,7 @@ Apply these values as the new defaults in the useDialKit call.`;
         </span>
       </motion.button>
 
+      {toolbarExtra}
     </>
   );
 

@@ -1,22 +1,17 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DialStore, PanelConfig } from '../store/DialStore';
+import { TimelineStore } from '../store/TimelineStore';
+import { isDevDefault } from '../env';
 import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
+import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
 import { blockPanelDragClick, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, hasPanelDragMoved } from '../panel-drag';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
 export type DialTheme = 'light' | 'dark' | 'system';
-
-declare const process: { env?: { NODE_ENV?: string } } | undefined;
-
-const isDevDefault = typeof process !== 'undefined' && process?.env?.NODE_ENV
-  ? process.env.NODE_ENV !== 'production'
-  : typeof import.meta !== 'undefined' && (import.meta as any).env?.MODE
-    ? (import.meta as any).env.MODE !== 'production'
-    : true;
 
 interface DialRootProps {
   position?: DialPosition;
@@ -30,6 +25,7 @@ interface DialRootProps {
 export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, onOpenChange }: DialRootProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
+  const [timelineCount, setTimelineCount] = useState(0);
   const [mounted, setMounted] = useState(false);
   const inline = mode === 'inline';
 
@@ -45,16 +41,24 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   const panelOpenStatesRef = useRef<Map<string, boolean>>(new Map());
   const rootOpenRef = useRef<boolean | null>(null);
 
-  // Subscribe to global panel changes
+  // Subscribe to registered editing surfaces. Timeline-backed panels render
+  // in DialTimeline, but their presence adds a visibility toggle here.
   useEffect(() => {
     setMounted(true);
-    setPanels(DialStore.getPanels());
+    setPanels(DialStore.getPanels('panel'));
+    setTimelineCount(TimelineStore.getTimelines().length);
 
-    const unsubscribe = DialStore.subscribeGlobal(() => {
-      setPanels(DialStore.getPanels());
+    const unsubscribePanels = DialStore.subscribeGlobal(() => {
+      setPanels(DialStore.getPanels('panel'));
+    });
+    const unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
+      setTimelineCount(TimelineStore.getTimelines().length);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribePanels();
+      unsubscribeTimelines();
+    };
   }, []);
 
   useEffect(() => {
@@ -164,8 +168,8 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     return null;
   }
 
-  // Don't render if no panels registered
-  if (panels.length === 0) {
+  // Don't render if no editing surfaces are registered.
+  if (panels.length === 0 && timelineCount === 0) {
     return null;
   }
 
@@ -177,6 +181,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   } : undefined;
   const originX = getPanelOriginX(activePosition, dragOffset);
   const hasMultiplePanels = panels.length > 1;
+  const timelineToggle = timelineCount > 0 ? <TimelineToggleButton /> : null;
 
   const content = (
   <ShortcutListener>
@@ -194,7 +199,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
         onPointerUp={!inline ? handlePointerUp : undefined}
         onPointerCancel={!inline ? handlePointerUp : undefined}
       >
-        {hasMultiplePanels ? (
+        {panels.length === 0 ? (
           <div className="dialkit-panel-wrapper">
             <Folder
               title="DialKit"
@@ -202,6 +207,21 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               isRoot={true}
               inline={inline}
               onOpenChange={handleRootOpenChange}
+              toolbar={timelineToggle}
+              panelHeightOffset={2}
+            >
+              <div className="dialkit-timeline-toolkit-only">Timeline</div>
+            </Folder>
+          </div>
+        ) : hasMultiplePanels ? (
+          <div className="dialkit-panel-wrapper">
+            <Folder
+              title="DialKit"
+              defaultOpen={inline || defaultOpen}
+              isRoot={true}
+              inline={inline}
+              onOpenChange={handleRootOpenChange}
+              toolbar={timelineToggle}
               panelHeightOffset={2}
             >
               {panels.map((panel) => (
@@ -221,6 +241,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               panel={panel}
               defaultOpen={inline || defaultOpen}
               inline={inline}
+              toolbarExtra={timelineToggle}
               onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
             />
           ))

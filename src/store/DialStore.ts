@@ -107,6 +107,7 @@ export type PanelConfig = {
   controls: ControlMeta[];
   values: Record<string, DialValue>;
   shortcuts: Record<string, ShortcutConfig>;
+  kind?: 'timeline';
 };
 
 type Listener = () => void;
@@ -127,6 +128,7 @@ export type DialKitPersistOptions = boolean | {
 export type DialStorePanelOptions = {
   retainOnUnmount?: boolean;
   persist?: DialKitPersistOptions;
+  kind?: 'timeline';
 };
 
 type PersistConfig = {
@@ -252,12 +254,33 @@ function hasType(value: unknown, type: string): boolean {
   return typeof value === 'object' && value !== null && 'type' in value && (value as { type: string }).type === type;
 }
 
-function isSpringConfigValue(value: unknown): value is SpringConfig {
+export function isSpringConfigValue(value: unknown): value is SpringConfig {
   return hasType(value, 'spring');
 }
 
-function isEasingConfigValue(value: unknown): value is EasingConfig {
+export function isEasingConfigValue(value: unknown): value is EasingConfig {
   return hasType(value, 'easing');
+}
+
+export function isHexColor(value: string): boolean {
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+}
+
+/** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
+export function formatLabel(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
+}
+
+/** Default slider step for a numeric range. */
+export function inferStep(min: number, max: number): number {
+  const range = max - min;
+  if (range <= 1) return 0.01;
+  if (range <= 10) return 0.1;
+  if (range <= 100) return 1;
+  return 10;
 }
 
 function isActionConfigValue(value: unknown): value is ActionConfig {
@@ -285,6 +308,8 @@ function getFirstOptionValue(options: (string | { value: string; label: string }
 class DialStoreClass {
   private panels: Map<string, PanelConfig> = new Map();
   private panelsSnapshot: PanelConfig[] = [];
+  private standardPanelsSnapshot: PanelConfig[] = [];
+  private timelinePanelsSnapshot: PanelConfig[] = [];
   private listeners: Map<string, Set<Listener>> = new Map();
   private globalListeners: Set<Listener> = new Set();
   private snapshots: Map<string, Record<string, DialValue>> = new Map();
@@ -298,6 +323,13 @@ class DialStoreClass {
   private persistConfigs: Map<string, PersistConfig> = new Map();
 
   registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options: DialStorePanelOptions = {}): void {
+    const existingPanel = this.panels.get(id);
+    if (existingPanel && existingPanel.kind !== options.kind) {
+      console.warn(
+        `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; ` +
+        `the most recent registration controls where it renders.`
+      );
+    }
     this.configurePanelRetention(id, options);
     this.registrationCounts.set(id, (this.registrationCounts.get(id) ?? 0) + 1);
 
@@ -315,7 +347,7 @@ class DialStoreClass {
     const previousBaseValues = this.baseValues.get(id) ?? persisted?.baseValues ?? persisted?.values ?? {};
     const baseValues = this.reconcileValues(defaultValues, previousBaseValues, controlsByPath);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, baseValues);
     this.defaultValues.set(id, { ...defaultValues });
@@ -347,7 +379,7 @@ class DialStoreClass {
     this.initTransitionModes(config, '', defaultValues);
     const nextValues = this.reconcileValues(defaultValues, existing.values, controlsByPath);
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -378,8 +410,11 @@ class DialStoreClass {
 
     this.registrationCounts.delete(id);
     this.panels.delete(id);
-    this.listeners.delete(id);
-    this.actionListeners.delete(id);
+    // Keep listener sets: subscribed components can outlive the registration
+    // (HMR unregister/re-register of the same id) and must keep receiving
+    // notifications. Cleanup happens via unsubscribe closures.
+    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
+    if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
 
     if (!this.retainedPanels.has(id)) {
       this.snapshots.delete(id);
@@ -496,10 +531,12 @@ class DialStoreClass {
     return this.snapshots.get(panelId) ?? EMPTY_VALUES;
   }
 
-  getPanels(): PanelConfig[] {
+  getPanels(kind?: 'panel' | 'timeline'): PanelConfig[] {
     // Stable reference between global notifications: getSnapshot-style
     // consumers (React useSyncExternalStore, Solid `from`) compare by
     // identity, and a fresh array on every call makes them loop or re-render.
+    if (kind === 'panel') return this.standardPanelsSnapshot;
+    if (kind === 'timeline') return this.timelinePanelsSnapshot;
     return this.panelsSnapshot;
   }
 
@@ -514,7 +551,11 @@ class DialStoreClass {
     this.listeners.get(panelId)!.add(listener);
 
     return () => {
-      this.listeners.get(panelId)?.delete(listener);
+      const listeners = this.listeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.listeners.delete(panelId);
+      }
     };
   }
 
@@ -530,7 +571,11 @@ class DialStoreClass {
     this.actionListeners.get(panelId)!.add(listener);
 
     return () => {
-      this.actionListeners.get(panelId)?.delete(listener);
+      const listeners = this.actionListeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.actionListeners.delete(panelId);
+      }
     };
   }
 
@@ -792,6 +837,8 @@ class DialStoreClass {
 
   private notifyGlobal(): void {
     this.panelsSnapshot = Array.from(this.panels.values());
+    this.standardPanelsSnapshot = this.panelsSnapshot.filter((panel) => panel.kind !== 'timeline');
+    this.timelinePanelsSnapshot = this.panelsSnapshot.filter((panel) => panel.kind === 'timeline');
     this.globalListeners.forEach(fn => fn());
   }
 
@@ -963,15 +1010,11 @@ class DialStoreClass {
   }
 
   private isHexColor(value: string): boolean {
-    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+    return isHexColor(value);
   }
 
   private formatLabel(key: string): string {
-    // Convert camelCase to Title Case
-    return key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .trim();
+    return formatLabel(key);
   }
 
   private inferRange(value: number): { min: number; max: number; step: number } {
@@ -990,11 +1033,7 @@ class DialStoreClass {
   }
 
   private inferStep(min: number, max: number): number {
-    const range = max - min;
-    if (range <= 1) return 0.01;
-    if (range <= 10) return 0.1;
-    if (range <= 100) return 1;
-    return 10;
+    return inferStep(min, max);
   }
 
   private normalizePreservedValue(
@@ -1085,4 +1124,4 @@ class DialStoreClass {
 }
 
 // Singleton instance
-export const DialStore = new DialStoreClass();
+export const DialStore = /* @__PURE__ */ new DialStoreClass();

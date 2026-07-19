@@ -21,6 +21,17 @@ export default defineConfig([
     splitting: false,
     sourcemap: true,
   },
+  // Framework-neutral timeline runtime. Svelte consumes this as a package
+  // subpath because svelte-package preserves imports instead of bundling it.
+  {
+    entry: { index: 'src/timeline/index.ts' },
+    outDir: 'dist/timeline',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [externalPackageStorePlugin],
+  },
   // Shared modules referenced by the packaged Svelte components.
   {
     entry: {
