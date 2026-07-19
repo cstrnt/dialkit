@@ -65,7 +65,7 @@ export default defineConfig([
   {
     entry: { index: 'src/solid/index.ts' },
     outDir: 'dist/solid',
-    format: ['esm', 'cjs'],
+    format: ['esm'],
     dts: {
       compilerOptions: {
         jsx: 'preserve',
@@ -82,7 +82,7 @@ export default defineConfig([
   {
     entry: { index: 'src/vue/index.ts' },
     outDir: 'dist/vue',
-    format: ['esm', 'cjs'],
+    format: ['esm'],
     dts: true,
     splitting: false,
     sourcemap: true,

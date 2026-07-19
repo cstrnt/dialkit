@@ -4,6 +4,7 @@ node_modules/
 # Build output (regenerated on install)
 dist/
 .svelte-kit/
+*.tgz
 
 # Generated artifacts from svelte-package
 src/store/DialStore.d.ts

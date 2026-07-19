@@ -1,4 +1,4 @@
-# dialkit v1.3.0
+# dialkit v1.4.0
 
 <img src="https://joshpuckett.me/images/dialkit.png" width="100%" />
 
