@@ -9,6 +9,9 @@
   import type { DialTheme } from '../DialRoot.svelte';
   import TimelineSection from './TimelineSection.svelte';
 
+  const DEFAULT_DOCK_MAX_HEIGHT = 400;
+  const MIN_DOCK_MAX_HEIGHT = 120;
+
   let {
     theme = 'system',
     defaultVisible = true,
@@ -29,6 +32,9 @@
   let mounted = $state(false);
   let timelines = $state<TimelineMeta[]>([]);
   let dockVisible = $state(TimelineUiStore.getVisible());
+  let dockMaxHeight = $state(DEFAULT_DOCK_MAX_HEIGHT);
+  let dockElement = $state<HTMLDivElement>();
+  let resizeCleanup: (() => void) | null = null;
 
   $effect(() => {
     if (typeof window === 'undefined') return;
@@ -61,12 +67,55 @@
       onVisibilityChange,
     });
   });
+
+  $effect(() => () => resizeCleanup?.());
+
+  function handleResizePointerDown(event: PointerEvent) {
+    if (!dockElement) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resizeCleanup?.();
+
+    const pointerY = event.clientY;
+    const startHeight = dockElement.getBoundingClientRect().height;
+    const move = (next: PointerEvent) => {
+      next.preventDefault();
+      const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+      dockMaxHeight = Math.min(
+        viewportMax,
+        Math.max(MIN_DOCK_MAX_HEIGHT, startHeight + pointerY - next.clientY)
+      );
+    };
+    const finish = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      resizeCleanup = null;
+    };
+
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    resizeCleanup = finish;
+  }
 </script>
 
 {#if productionEnabled && mounted && timelines.length > 0}
   <Portal target="body">
     <div class="dialkit-root dialkit-timeline" data-theme={theme} hidden={!dockVisible}>
-      <div class="dialkit-timeline-dock">
+      <div
+        class="dialkit-timeline-resize-handle"
+        onpointerdown={handleResizePointerDown}
+        role="separator"
+        aria-label="Resize timeline height"
+        aria-orientation="horizontal"
+        title="Drag to resize timeline"
+      ></div>
+      <div
+        bind:this={dockElement}
+        class="dialkit-timeline-dock"
+        style:max-height={`min(${dockMaxHeight}px, calc(100vh - 24px))`}
+      >
         {#each timelines as timeline (timeline.id)}
           <TimelineSection meta={timeline} {defaultOpen} {theme} {dockVisible} />
         {/each}

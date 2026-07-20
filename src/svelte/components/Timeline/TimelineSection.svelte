@@ -24,6 +24,7 @@
     ICON_CLIPBOARD,
     ICON_PAUSE,
     ICON_PLAY,
+    ICON_REPLAY,
   } from '../../../icons';
   import { findControl } from '../../../shortcut-utils';
   import PresetManager from '../PresetManager.svelte';
@@ -43,6 +44,7 @@
   ];
   const MIN_TIMELINE_MAX_ZOOM = 8;
   const PLAYHEAD_FLAG_WIDTH = 52;
+  const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
   const ZOOM_DRAG_DISTANCE = 180;
 
   type ZoomDragState = {
@@ -105,10 +107,8 @@
   let values = $state<Record<string, DialValue>>(DialStore.getValues(untrack(() => meta.id)));
   let transport = $state<TimelineTransport>(TimelineStore.getTransport(untrack(() => meta.id)));
   let laneArea = $state<HTMLDivElement>();
-  let titleElement = $state<HTMLSpanElement>();
-  let actionsElement = $state<HTMLDivElement>();
+  let horizontalScrollElement = $state<HTMLDivElement>();
   let laneWidth = $state(0);
-  let flagClearRange = $state({ start: 0, end: 0 });
 
   let zoomDrag: ZoomDragState | null = null;
   let rulerScrub: ScrubState | null = null;
@@ -138,12 +138,15 @@
   const playheadVisible = $derived(
     transport.time >= safeViewStart && transport.time <= viewEnd && laneWidth > 0
   );
-  const playheadPlacement = $derived.by(() => {
-    const left = playheadX - PLAYHEAD_FLAG_WIDTH / 2;
-    return left >= flagClearRange.start && left + PLAYHEAD_FLAG_WIDTH <= flagClearRange.end
-      ? 'raised'
-      : 'lowered';
-  });
+  const playheadFlagCenter = $derived(clamp(
+    playheadX,
+    PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
+    laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
+  ));
+  const playheadFlagOffset = $derived(playheadFlagCenter - playheadX);
+  const playheadEdge = $derived(
+    playheadFlagOffset > 0.5 ? 'start' : playheadFlagOffset < -0.5 ? 'end' : 'center'
+  );
   const overviewViewportWidth = $derived(
     meta.duration > 0 ? ((viewEnd - safeViewStart) / meta.duration) * 100 : 100
   );
@@ -243,23 +246,13 @@
   });
 
   $effect(() => {
-    if (!open || !laneArea || !titleElement || !actionsElement) return;
+    if (!open || !laneArea) return;
     const measure = () => {
-      if (!laneArea || !titleElement || !actionsElement) return;
-      const rulerRect = laneArea.getBoundingClientRect();
-      const titleRect = titleElement.getBoundingClientRect();
-      const actionsRect = actionsElement.getBoundingClientRect();
-      laneWidth = rulerRect.width;
-      flagClearRange = {
-        start: Math.round(titleRect.right + 10 - rulerRect.left),
-        end: Math.round(actionsRect.left - 10 - rulerRect.left),
-      };
+      if (laneArea) laneWidth = laneArea.getBoundingClientRect().width;
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(laneArea);
-    observer.observe(titleElement);
-    observer.observe(actionsElement);
     return () => observer.disconnect();
   });
 
@@ -268,6 +261,14 @@
     if (nextZoom !== zoom) zoom = nextZoom;
     const nextStart = clampViewStart(viewStart, meta.duration, meta.duration / zoom);
     if (nextStart !== viewStart) viewStart = nextStart;
+  });
+
+  $effect(() => {
+    if (!open || !horizontalScrollElement || pxPerSecond <= 0) return;
+    const next = safeViewStart * pxPerSecond;
+    if (Math.abs(horizontalScrollElement.scrollLeft - next) > 0.5) {
+      horizontalScrollElement.scrollLeft = next;
+    }
   });
 
   $effect(() => {
@@ -283,6 +284,32 @@
   function resetView() {
     zoom = 1;
     viewStart = 0;
+  }
+
+  function handleReplay() {
+    viewStart = 0;
+    TimelineStore.replay(meta.id);
+  }
+
+  function handleHorizontalScroll(event: Event) {
+    if (pxPerSecond <= 0) return;
+    viewStart = clampViewStart(
+      (event.currentTarget as HTMLDivElement).scrollLeft / pxPerSecond,
+      meta.duration,
+      visibleDuration
+    );
+  }
+
+  function handleTimelineWheel(event: WheelEvent) {
+    if (!horizontalScrollElement || zoom <= 1) return;
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX
+      : event.shiftKey
+        ? event.deltaY
+        : 0;
+    if (delta === 0) return;
+    event.preventDefault();
+    horizontalScrollElement.scrollLeft += delta;
   }
 
   function seek(scrub: ScrubState | null, clientX: number) {
@@ -506,7 +533,7 @@
 <div class="dialkit-timeline-section">
   <div class="dialkit-timeline-header" data-open={open || undefined}>
     <div class="dialkit-timeline-identity">
-      <span bind:this={titleElement} class="dialkit-timeline-title">{meta.name}</span>
+      <span class="dialkit-timeline-title">{meta.name}</span>
     </div>
 
     {#if !open}
@@ -536,7 +563,7 @@
       </div>
     {/if}
 
-    <div bind:this={actionsElement} class="dialkit-timeline-actions">
+    <div class="dialkit-timeline-actions">
       <button
         class="dialkit-toolbar-add"
         onclick={() => transport.playing ? TimelineStore.pause(meta.id) : TimelineStore.play(meta.id)}
@@ -554,6 +581,11 @@
             </svg>
           {/if}
         </span>
+      </button>
+      <button class="dialkit-toolbar-add" onclick={handleReplay} title="Replay" aria-label="Replay">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:16px;height:16px;color:var(--dial-text-label);">
+          {#each ICON_REPLAY as path}<path d={path} fill="currentColor" />{/each}
+        </svg>
       </button>
       <button class="dialkit-toolbar-add" onclick={handleAddPreset} title="Add timeline version" aria-label="Add timeline version">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -598,6 +630,7 @@
   {#if open}
     <div
       class="dialkit-timeline-body"
+      onwheel={handleTimelineWheel}
       onpointerdown={handleTrackPointerDown}
       onpointermove={(event) => trackScrub && seek(trackScrub, event.clientX)}
       onpointerup={finishTrack}
@@ -726,9 +759,8 @@
         {#if pxPerSecond > 0 && playheadVisible}
           <div
             class="dialkit-timeline-playhead-control"
-            data-edge="center"
-            data-placement={playheadPlacement}
-            style:left={`calc(var(--dial-timeline-label-w) + ${playheadX}px)`}
+            data-edge={playheadEdge}
+            style={`left:calc(var(--dial-timeline-label-w) + ${playheadX}px);--dial-timeline-playhead-flag-offset:${playheadFlagOffset}px;`}
             onpointerdown={handlePlayheadPointerDown}
             onpointermove={(event) => playheadScrub && seek(playheadScrub, event.clientX)}
             onpointerup={finishPlayhead}
@@ -742,11 +774,26 @@
             aria-valuenow={transport.time}
             title="Drag to scrub the timeline"
           >
-            <div class="dialkit-timeline-playhead-flag">{transport.time.toFixed(2)}</div>
             <div class="dialkit-timeline-playhead-stem"></div>
+            <div class="dialkit-timeline-playhead-anchor">
+              <div class="dialkit-timeline-playhead-flag">{transport.time.toFixed(2)}</div>
+            </div>
           </div>
         {/if}
       </div>
+      {#if zoom > 1}
+        <div class="dialkit-timeline-scroll-row">
+          <div class="dialkit-timeline-label"></div>
+          <div
+            bind:this={horizontalScrollElement}
+            class="dialkit-timeline-horizontal-scroll"
+            onscroll={handleHorizontalScroll}
+            aria-label="Timeline horizontal scroll"
+          >
+            <div style:width={`${laneWidth * zoom}px`}></div>
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 

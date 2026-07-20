@@ -41,6 +41,7 @@ import {
   ICON_CLIPBOARD,
   ICON_PAUSE,
   ICON_PLAY,
+  ICON_REPLAY,
 } from '../../../icons';
 import { findControl } from '../../../shortcut-utils';
 import { ControlRenderer } from '../ControlRenderer';
@@ -58,8 +59,11 @@ const SECOND_TICK_STEPS = [
 ];
 const MIN_TIMELINE_MAX_ZOOM = 8;
 const PLAYHEAD_FLAG_WIDTH = 52;
+const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
 const POPOVER_WIDTH = 280;
 const ZOOM_DRAG_DISTANCE = 180;
+const DEFAULT_DOCK_MAX_HEIGHT = 400;
+const MIN_DOCK_MAX_HEIGHT = 120;
 
 export const DialTimeline = defineComponent({
   name: 'DialKitTimeline',
@@ -78,10 +82,39 @@ export const DialTimeline = defineComponent({
     const timelines = ref<TimelineMeta[]>(TimelineStore.getTimelines());
     const dockVisible = ref(TimelineUiStore.getVisible());
     const mounted = ref(false);
+    const dockMaxHeight = ref(DEFAULT_DOCK_MAX_HEIGHT);
+    const dockRef = ref<HTMLDivElement | null>(null);
     const controllerId = Symbol('dialkit-timeline-visibility');
     let unsubscribeTimelines: (() => void) | undefined;
     let unsubscribeVisibility: (() => void) | undefined;
     let unregisterController: (() => void) | undefined;
+    let resizeCleanup: (() => void) | null = null;
+
+    const handleResizePointerDown = (event: PointerEvent) => {
+      if (!dockRef.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+      resizeCleanup?.();
+
+      const pointerY = event.clientY;
+      const startHeight = dockRef.value.getBoundingClientRect().height;
+      const move = (next: PointerEvent) => {
+        next.preventDefault();
+        const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+        dockMaxHeight.value = clamp(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax);
+      };
+      const finish = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', finish);
+        window.removeEventListener('pointercancel', finish);
+        resizeCleanup = null;
+      };
+
+      window.addEventListener('pointermove', move, { passive: false });
+      window.addEventListener('pointerup', finish);
+      window.addEventListener('pointercancel', finish);
+      resizeCleanup = finish;
+    };
 
     onMounted(() => {
       mounted.value = true;
@@ -109,6 +142,7 @@ export const DialTimeline = defineComponent({
       unregisterController?.();
       unsubscribeTimelines?.();
       unsubscribeVisibility?.();
+      resizeCleanup?.();
     });
 
     return () => {
@@ -119,7 +153,19 @@ export const DialTimeline = defineComponent({
           'data-theme': props.theme,
           hidden: !dockVisible.value,
         }, [
-          h('div', { class: 'dialkit-timeline-dock' }, timelines.value.map((meta) => h(TimelineSection, {
+          h('div', {
+            class: 'dialkit-timeline-resize-handle',
+            role: 'separator',
+            'aria-label': 'Resize timeline height',
+            'aria-orientation': 'horizontal',
+            title: 'Drag to resize timeline',
+            onPointerdown: handleResizePointerDown,
+          }),
+          h('div', {
+            ref: dockRef,
+            class: 'dialkit-timeline-dock',
+            style: { maxHeight: `min(${dockMaxHeight.value}px, calc(100vh - 24px))` },
+          }, timelines.value.map((meta) => h(TimelineSection, {
             key: meta.id,
             meta,
             defaultOpen: props.defaultOpen,
@@ -158,6 +204,21 @@ const PlayPauseButton = defineComponent({
         onClick: () => playing.value ? TimelineStore.pause(props.id) : TimelineStore.play(props.id),
       }, [h('span', { style: { position: 'relative', width: '16px', height: '16px' } }, [icon])]);
     };
+  },
+});
+
+const ReplayButton = defineComponent({
+  props: { onReplay: { type: Function as PropType<() => void>, required: true } },
+  setup(props) {
+    return () => h('button', {
+      class: 'dialkit-toolbar-add',
+      title: 'Replay',
+      'aria-label': 'Replay',
+      onClick: props.onReplay,
+    }, [
+      h('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },
+        ICON_REPLAY.map((path) => h('path', { d: path, fill: 'currentColor' }))),
+    ]);
   },
 });
 
@@ -235,8 +296,6 @@ const TimelinePlayheadFlag = defineComponent({
     viewEnd: { type: Number, required: true },
     laneWidth: { type: Number, required: true },
     ruler: Object as PropType<HTMLDivElement>,
-    headerClearStart: { type: Number, required: true },
-    headerClearEnd: { type: Number, required: true },
     onResetView: { type: Function as PropType<() => void>, required: true },
   },
   setup(props) {
@@ -264,13 +323,20 @@ const TimelinePlayheadFlag = defineComponent({
     return () => {
       if (time.value < props.viewStart || time.value > props.viewEnd || props.laneWidth <= 0) return null;
       const x = clamp((time.value - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
-      const left = x - PLAYHEAD_FLAG_WIDTH / 2;
-      const placement = left >= props.headerClearStart && left + PLAYHEAD_FLAG_WIDTH <= props.headerClearEnd ? 'raised' : 'lowered';
+      const flagCenter = clamp(
+        x,
+        PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
+        props.laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
+      );
+      const flagOffset = flagCenter - x;
+      const edge = flagOffset > 0.5 ? 'start' : flagOffset < -0.5 ? 'end' : 'center';
       return h('div', {
         class: 'dialkit-timeline-playhead-control',
-        'data-edge': 'center',
-        'data-placement': placement,
-        style: { left: `calc(var(--dial-timeline-label-w) + ${x}px)` },
+        'data-edge': edge,
+        style: {
+          left: `calc(var(--dial-timeline-label-w) + ${x}px)`,
+          '--dial-timeline-playhead-flag-offset': `${flagOffset}px`,
+        },
         role: 'slider',
         'aria-label': 'Timeline current time',
         'aria-valuemin': 0,
@@ -311,8 +377,10 @@ const TimelinePlayheadFlag = defineComponent({
           cleanup = finish;
         },
       }, [
-        h('div', { class: 'dialkit-timeline-playhead-flag' }, time.value.toFixed(2)),
         h('div', { class: 'dialkit-timeline-playhead-stem' }),
+        h('div', { class: 'dialkit-timeline-playhead-anchor' }, [
+          h('div', { class: 'dialkit-timeline-playhead-flag' }, time.value.toFixed(2)),
+        ]),
       ]);
     };
   },
@@ -361,34 +429,22 @@ const TimelineSection = defineComponent({
     const presets = ref(DialStore.getPresets(props.meta.id));
     const activePresetId = ref(DialStore.getActivePresetId(props.meta.id));
     const laneAreaRef = ref<HTMLDivElement | null>(null);
-    const titleRef = ref<HTMLSpanElement | null>(null);
-    const actionsRef = ref<HTMLDivElement | null>(null);
+    const horizontalScrollRef = ref<HTMLDivElement | null>(null);
     const laneWidth = ref(0);
-    const flagClearRange = ref({ start: 0, end: 0 });
     let unsubscribeValues: (() => void) | undefined;
     let resizeObserver: ResizeObserver | undefined;
 
     const measure = () => {
-      if (!laneAreaRef.value || !titleRef.value || !actionsRef.value) return;
-      const ruler = laneAreaRef.value.getBoundingClientRect();
-      const title = titleRef.value.getBoundingClientRect();
-      const actions = actionsRef.value.getBoundingClientRect();
-      laneWidth.value = ruler.width;
-      flagClearRange.value = {
-        start: Math.round(title.right + 10 - ruler.left),
-        end: Math.round(actions.left - 10 - ruler.left),
-      };
+      if (laneAreaRef.value) laneWidth.value = laneAreaRef.value.getBoundingClientRect().width;
     };
     const connectMeasure = async () => {
       resizeObserver?.disconnect();
       if (!open.value) return;
       await nextTick();
-      if (!laneAreaRef.value || !titleRef.value || !actionsRef.value) return;
+      if (!laneAreaRef.value) return;
       measure();
       resizeObserver = new ResizeObserver(measure);
       resizeObserver.observe(laneAreaRef.value);
-      resizeObserver.observe(titleRef.value);
-      resizeObserver.observe(actionsRef.value);
     };
 
     onMounted(() => {
@@ -422,6 +478,13 @@ const TimelineSection = defineComponent({
     watch([() => props.meta.duration, zoom], () => {
       viewStart.value = clampViewStart(viewStart.value, props.meta.duration, props.meta.duration / zoom.value);
     });
+    watch([open, pxPerSecond, safeViewStart], async () => {
+      await nextTick();
+      const scroller = horizontalScrollRef.value;
+      if (!scroller || pxPerSecond.value <= 0) return;
+      const next = safeViewStart.value * pxPerSecond.value;
+      if (Math.abs(scroller.scrollLeft - next) > 0.5) scroller.scrollLeft = next;
+    });
 
     const centerViewAt = (time: number) => {
       if (zoom.value <= 1 || props.meta.duration <= 0) return;
@@ -431,6 +494,30 @@ const TimelineSection = defineComponent({
     const resetView = () => {
       zoom.value = 1;
       viewStart.value = 0;
+    };
+    const handleReplay = () => {
+      viewStart.value = 0;
+      TimelineStore.replay(props.meta.id);
+    };
+    const handleHorizontalScroll = (event: Event) => {
+      if (pxPerSecond.value <= 0) return;
+      viewStart.value = clampViewStart(
+        (event.currentTarget as HTMLDivElement).scrollLeft / pxPerSecond.value,
+        props.meta.duration,
+        visibleDuration.value
+      );
+    };
+    const handleTimelineWheel = (event: WheelEvent) => {
+      const scroller = horizontalScrollRef.value;
+      if (!scroller || zoom.value <= 1) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.shiftKey
+          ? event.deltaY
+          : 0;
+      if (delta === 0) return;
+      event.preventDefault();
+      scroller.scrollLeft += delta;
     };
 
     let zoomDrag: ZoomDragState | null = null;
@@ -618,7 +705,7 @@ const TimelineSection = defineComponent({
     return () => h('div', { class: 'dialkit-timeline-section' }, [
       h('div', { class: 'dialkit-timeline-header', 'data-open': open.value || undefined }, [
         h('div', { class: 'dialkit-timeline-identity' }, [
-          h('span', { ref: titleRef, class: 'dialkit-timeline-title' }, props.meta.name),
+          h('span', { class: 'dialkit-timeline-title' }, props.meta.name),
         ]),
         !open.value ? h(TimelineOverview, {
           id: props.meta.id,
@@ -627,8 +714,9 @@ const TimelineSection = defineComponent({
           viewEnd: viewEnd.value,
           onNavigate: centerViewAt,
         }) : null,
-        h('div', { ref: actionsRef, class: 'dialkit-timeline-actions' }, [
+        h('div', { class: 'dialkit-timeline-actions' }, [
           h(PlayPauseButton, { id: props.meta.id }),
+          h(ReplayButton, { onReplay: handleReplay }),
           h('button', { class: 'dialkit-toolbar-add', title: 'Add timeline version', 'aria-label': 'Add timeline version', onClick: handleAddPreset }, [
             h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
               ICON_ADD_PRESET.map((path) => h('path', { d: path }))),
@@ -659,6 +747,7 @@ const TimelineSection = defineComponent({
       ]),
       open.value ? h('div', {
         class: 'dialkit-timeline-body',
+        onWheel: handleTimelineWheel,
         onPointerdown: (event: PointerEvent) => {
           const target = event.target as HTMLElement;
           if (target.closest('.dialkit-timeline-label, button')) return;
@@ -752,11 +841,17 @@ const TimelineSection = defineComponent({
           viewEnd: viewEnd.value,
           laneWidth: laneWidth.value,
           ruler: laneAreaRef.value ?? undefined,
-          headerClearStart: flagClearRange.value.start,
-          headerClearEnd: flagClearRange.value.end,
           onResetView: resetView,
         }) : null,
-      ])]) : null,
+      ]), zoom.value > 1 ? h('div', { class: 'dialkit-timeline-scroll-row' }, [
+        h('div', { class: 'dialkit-timeline-label' }),
+        h('div', {
+          ref: horizontalScrollRef,
+          class: 'dialkit-timeline-horizontal-scroll',
+          'aria-label': 'Timeline horizontal scroll',
+          onScroll: handleHorizontalScroll,
+        }, [h('div', { style: { width: `${laneWidth.value * zoom.value}px` } })]),
+      ]) : null]) : null,
       popover.value ? h(ClipPopover, {
         panelId: props.meta.id,
         popover: popover.value,
