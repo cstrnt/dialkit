@@ -16,6 +16,7 @@ example/src/TimelineDemo.tsx
 example/src/TimelineSolo.tsx
 example/src/TimelineTest1.tsx
 example/src/TimelineTest2.tsx
+example/public/
 
 # IDE
 .vscode/

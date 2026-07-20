@@ -1453,29 +1453,52 @@
 }
 
 .dialkit-timeline-dock {
+  position: relative;
+  box-sizing: border-box;
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
   border-radius: 14px;
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
-  padding: 10px 12px;
+  padding: 0 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: calc(100vh - 24px);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dial-text-tertiary) transparent;
+}
+
+.dialkit-timeline-resize-handle {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  z-index: 9;
+  height: 10px;
+  cursor: ns-resize;
+  touch-action: none;
 }
 
 .dialkit-timeline-dock::-webkit-scrollbar {
-  display: none;
+  width: 8px;
+}
+
+.dialkit-timeline-dock::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dialkit-timeline-dock::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--dial-text-tertiary);
 }
 
 .dialkit-timeline-section {
   --dial-timeline-label-w: 96px;
   --dial-timeline-actions-w: 284px;
+  --dial-timeline-header-h: calc(var(--dial-row-height) + 4px);
 }
 
 .dialkit-timeline-section + .dialkit-timeline-section {
@@ -1489,10 +1512,12 @@
   align-items: center;
   gap: 12px;
   position: sticky;
-  top: -10px;
-  z-index: 4;
-  padding: 6px 0 0;
-  margin-top: -6px;
+  top: 0;
+  z-index: 7;
+  box-sizing: border-box;
+  height: var(--dial-timeline-header-h);
+  padding: 4px 0 0;
+  margin: 0;
   background: var(--dial-glass-bg);
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
@@ -1657,8 +1682,49 @@
 }
 
 .dialkit-timeline-body {
-  margin-top: 6px;
+  margin-top: 0;
   overflow: visible;
+}
+
+.dialkit-timeline-scroll-row {
+  position: sticky;
+  bottom: -10px;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: var(--dial-timeline-label-w) minmax(0, 1fr);
+  margin-top: 6px;
+  margin-bottom: -10px;
+  padding: 4px 0 10px;
+  background: var(--dial-glass-bg);
+  backdrop-filter: blur(var(--dial-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
+}
+
+.dialkit-timeline-horizontal-scroll {
+  min-width: 0;
+  height: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dial-text-tertiary) transparent;
+  overscroll-behavior-x: contain;
+}
+
+.dialkit-timeline-horizontal-scroll > div {
+  height: 1px;
+}
+
+.dialkit-timeline-horizontal-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.dialkit-timeline-horizontal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dialkit-timeline-horizontal-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--dial-text-tertiary);
 }
 
 .dialkit-timeline-grid {
@@ -1704,7 +1770,13 @@
 }
 
 .dialkit-timeline-ruler-row {
+  position: sticky;
+  top: var(--dial-timeline-header-h);
+  z-index: 6;
   height: 28px;
+  background: var(--dial-glass-bg);
+  backdrop-filter: blur(var(--dial-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
 }
 
 .dialkit-timeline-tick {
@@ -1947,15 +2019,24 @@
   bottom: 0;
   width: 12px;
   margin-left: -6px;
-  z-index: 5;
+  z-index: 8;
   cursor: ew-resize;
   touch-action: none;
 }
 
+.dialkit-timeline-playhead-anchor {
+  position: sticky;
+  top: calc(var(--dial-timeline-header-h) + 14px);
+  width: 0;
+  height: 0;
+  margin-left: 6px;
+}
+
 .dialkit-timeline-playhead-flag {
   position: absolute;
-  top: 14px;
-  left: 50%;
+  top: 0;
+  left: calc(var(--dial-timeline-playhead-flag-offset, 0px) - 26px);
+  z-index: 1;
   width: 52px;
   height: 18px;
   padding: 0 7px;
@@ -1972,29 +2053,20 @@
   line-height: 16px;
   text-align: center;
   white-space: nowrap;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
   transition: top 0.12s ease;
 }
 
-.dialkit-timeline-playhead-control[data-placement="raised"] .dialkit-timeline-playhead-flag {
-  top: -24px;
-}
-
 .dialkit-timeline-playhead-stem {
   position: absolute;
-  top: 23px;
+  top: 14px;
   bottom: 0;
   left: 5.25px;
   width: 1.5px;
   border-radius: 1px;
   background: var(--dial-text-root);
   pointer-events: none;
-  transition: top 0.12s ease;
-}
-
-.dialkit-timeline-playhead-control[data-placement="raised"] .dialkit-timeline-playhead-stem {
-  top: -15px;
 }
 
 /* ── Timeline clip popover ── */
@@ -2073,13 +2145,12 @@
 
 @media (max-width: 720px) {
   .dialkit-timeline-dock {
-    padding: 10px;
+    padding: 0 10px 10px;
   }
 
   .dialkit-timeline-header {
     grid-template-columns: auto minmax(40px, 1fr) auto;
     gap: 8px;
-    top: -10px;
   }
 
   .dialkit-timeline-section {

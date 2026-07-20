@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { DialStore, formatLabel } from '../../store/DialStore';
@@ -25,7 +25,7 @@ import type { TimelineClipLoop, TimelineStepStatic } from '../../timeline-core';
 import { clamp } from '../../transition-math';
 import { buildCopyInstruction } from '../../copy-instruction';
 import { isDevDefault } from '../../env';
-import { ICON_ADD_PRESET, ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD, ICON_PAUSE, ICON_PLAY } from '../../icons';
+import { ICON_ADD_PRESET, ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from '../../icons';
 import { findControl } from '../../shortcut-utils';
 import { ControlRenderer } from '../ControlRenderer';
 import { PresetManager } from '../PresetManager';
@@ -42,8 +42,11 @@ const SECOND_TICK_STEPS = [
 ];
 const MIN_TIMELINE_MAX_ZOOM = 8;
 const PLAYHEAD_FLAG_WIDTH = 52;
+const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
 const POPOVER_WIDTH = 280;
 const ZOOM_DRAG_DISTANCE = 180;
+const DEFAULT_DOCK_MAX_HEIGHT = 400;
+const MIN_DOCK_MAX_HEIGHT = 120;
 
 const subscribeGlobalTimelines = (callback: () => void) => TimelineStore.subscribeGlobal(callback);
 const getTimelines = () => TimelineStore.getTimelines();
@@ -99,7 +102,10 @@ function DialTimelineDock({
   defaultOpen: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [dockMaxHeight, setDockMaxHeight] = useState(DEFAULT_DOCK_MAX_HEIGHT);
   const visibilityControllerId = useRef(Symbol('dialkit-timeline-visibility'));
+  const dockRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => TimelineUiStore.registerController(visibilityControllerId.current, {
     visible,
@@ -119,6 +125,35 @@ function DialTimelineDock({
     setMounted(true);
   }, []);
 
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+  const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const dock = dockRef.current;
+    if (!dock) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resizeCleanupRef.current?.();
+
+    const pointerY = e.clientY;
+    const startHeight = dock.getBoundingClientRect().height;
+    const handlePointerMove = (event: PointerEvent) => {
+      event.preventDefault();
+      const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+      setDockMaxHeight(clamp(startHeight + pointerY - event.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
+    };
+    const finishResize = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finishResize);
+      window.removeEventListener('pointercancel', finishResize);
+      resizeCleanupRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', finishResize);
+    window.addEventListener('pointercancel', finishResize);
+    resizeCleanupRef.current = finishResize;
+  }, []);
+
   const timelines = useSyncExternalStore(subscribeGlobalTimelines, getTimelines, getTimelines);
   const dockVisible = useSyncExternalStore(
     subscribeTimelineVisibility,
@@ -132,7 +167,19 @@ function DialTimelineDock({
 
   return createPortal(
     <div className="dialkit-root dialkit-timeline" data-theme={theme} hidden={!dockVisible}>
-      <div className="dialkit-timeline-dock">
+      <div
+        className="dialkit-timeline-resize-handle"
+        onPointerDown={handleResizePointerDown}
+        role="separator"
+        aria-label="Resize timeline height"
+        aria-orientation="horizontal"
+        title="Drag to resize timeline"
+      />
+      <div
+        ref={dockRef}
+        className="dialkit-timeline-dock"
+        style={{ maxHeight: `min(${dockMaxHeight}px, calc(100vh - 24px))` }}
+      >
         {timelines.map((timeline) => (
           <TimelineSection
             key={timeline.id}
@@ -209,6 +256,23 @@ function PlayPauseButton({ id }: { id: string }) {
   );
 }
 
+function ReplayButton({ onReplay }: { onReplay: () => void }) {
+  return (
+    <motion.button
+      className="dialkit-toolbar-add"
+      onClick={onReplay}
+      title="Replay"
+      aria-label="Replay"
+      whileTap={{ scale: 0.9 }}
+      transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        {ICON_REPLAY.map((d, i) => <path key={i} d={d} fill="currentColor" />)}
+      </svg>
+    </motion.button>
+  );
+}
+
 function TimelinePlayheadFlag({
   id,
   duration,
@@ -217,8 +281,6 @@ function TimelinePlayheadFlag({
   viewEnd,
   laneWidth,
   rulerRef,
-  headerClearStart,
-  headerClearEnd,
   onResetView,
 }: {
   id: string;
@@ -228,8 +290,6 @@ function TimelinePlayheadFlag({
   viewEnd: number;
   laneWidth: number;
   rulerRef: React.RefObject<HTMLDivElement>;
-  headerClearStart: number;
-  headerClearEnd: number;
   onResetView: () => void;
 }) {
   const subscribe = useTransportSubscribe(id);
@@ -301,18 +361,22 @@ function TimelinePlayheadFlag({
     0,
     laneWidth
   );
-  const flagLeft = x - PLAYHEAD_FLAG_WIDTH / 2;
-  const flagRight = flagLeft + PLAYHEAD_FLAG_WIDTH;
-  const placement = flagLeft >= headerClearStart && flagRight <= headerClearEnd
-    ? 'raised'
-    : 'lowered';
+  const flagCenter = clamp(
+    x,
+    PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
+    laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
+  );
+  const flagOffset = flagCenter - x;
+  const edge = flagOffset > 0.5 ? 'start' : flagOffset < -0.5 ? 'end' : 'center';
 
   return (
     <div
       className="dialkit-timeline-playhead-control"
-      data-edge="center"
-      data-placement={placement}
-      style={{ left: `calc(var(--dial-timeline-label-w) + ${x}px)` }}
+      data-edge={edge}
+      style={{
+        left: `calc(var(--dial-timeline-label-w) + ${x}px)`,
+        '--dial-timeline-playhead-flag-offset': `${flagOffset}px`,
+      } as CSSProperties}
       onPointerDown={handlePointerDown}
       role="slider"
       aria-label="Timeline current time"
@@ -321,8 +385,10 @@ function TimelinePlayheadFlag({
       aria-valuenow={time}
       title="Drag to scrub the timeline"
     >
-      <div className="dialkit-timeline-playhead-flag">{time.toFixed(2)}</div>
       <div className="dialkit-timeline-playhead-stem" />
+      <div className="dialkit-timeline-playhead-anchor">
+        <div className="dialkit-timeline-playhead-flag">{time.toFixed(2)}</div>
+      </div>
     </div>
   );
 }
@@ -457,31 +523,19 @@ const TimelineSection = memo(function TimelineSection({
 
   // Measure the shared ruler/track span so seconds map to pixels.
   const laneAreaRef = useRef<HTMLDivElement>(null);
-  const titleRef = useRef<HTMLSpanElement>(null);
-  const actionsRef = useRef<HTMLDivElement>(null);
+  const horizontalScrollRef = useRef<HTMLDivElement>(null);
   const [laneWidth, setLaneWidth] = useState(0);
-  const [flagClearRange, setFlagClearRange] = useState({ start: 0, end: 0 });
 
   useLayoutEffect(() => {
     if (!open) return;
     const ruler = laneAreaRef.current;
-    const title = titleRef.current;
-    const actions = actionsRef.current;
-    if (!ruler || !title || !actions) return;
+    if (!ruler) return;
     const measure = () => {
-      const rulerRect = ruler.getBoundingClientRect();
-      const titleRect = title.getBoundingClientRect();
-      const actionsRect = actions.getBoundingClientRect();
-      setLaneWidth(rulerRect.width);
-      const start = Math.round(titleRect.right + 10 - rulerRect.left);
-      const end = Math.round(actionsRect.left - 10 - rulerRect.left);
-      setFlagClearRange((current) => current.start === start && current.end === end ? current : { start, end });
+      setLaneWidth(ruler.getBoundingClientRect().width);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(ruler);
-    observer.observe(title);
-    observer.observe(actions);
     return () => observer.disconnect();
   }, [open]);
 
@@ -502,6 +556,15 @@ const TimelineSection = memo(function TimelineSection({
     setViewStart((current) => clampViewStart(current, meta.duration, meta.duration / zoom));
   }, [meta.duration, zoom]);
 
+  useLayoutEffect(() => {
+    const scroller = horizontalScrollRef.current;
+    if (!scroller || pxPerSecond <= 0) return;
+    const nextScrollLeft = safeViewStart * pxPerSecond;
+    if (Math.abs(scroller.scrollLeft - nextScrollLeft) > 0.5) {
+      scroller.scrollLeft = nextScrollLeft;
+    }
+  }, [open, pxPerSecond, safeViewStart]);
+
   useEffect(() => {
     if (!dockVisible) setPopover(null);
   }, [dockVisible]);
@@ -516,6 +579,33 @@ const TimelineSection = memo(function TimelineSection({
     setZoom(1);
     setViewStart(0);
   }, []);
+
+  const handleReplay = useCallback(() => {
+    setViewStart(0);
+    TimelineStore.replay(meta.id);
+  }, [meta.id]);
+
+  const handleHorizontalScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (pxPerSecond <= 0) return;
+    setViewStart(clampViewStart(
+      e.currentTarget.scrollLeft / pxPerSecond,
+      meta.duration,
+      visibleDuration
+    ));
+  }, [meta.duration, pxPerSecond, visibleDuration]);
+
+  const handleTimelineWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const scroller = horizontalScrollRef.current;
+    if (!scroller || zoom <= 1) return;
+    const horizontalDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY)
+      ? e.deltaX
+      : e.shiftKey
+        ? e.deltaY
+        : 0;
+    if (horizontalDelta === 0) return;
+    e.preventDefault();
+    scroller.scrollLeft += horizontalDelta;
+  }, [zoom]);
 
   // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
   // Shift-drag first restores the full 1x range.
@@ -886,7 +976,7 @@ const TimelineSection = memo(function TimelineSection({
     <div className="dialkit-timeline-section">
       <div className="dialkit-timeline-header" data-open={open || undefined}>
         <div className="dialkit-timeline-identity">
-          <span ref={titleRef} className="dialkit-timeline-title">{meta.name}</span>
+          <span className="dialkit-timeline-title">{meta.name}</span>
         </div>
         {!open && (
           <TimelineOverview
@@ -897,8 +987,9 @@ const TimelineSection = memo(function TimelineSection({
             onNavigate={centerViewAt}
           />
         )}
-        <div ref={actionsRef} className="dialkit-timeline-actions">
+        <div className="dialkit-timeline-actions">
           <PlayPauseButton id={meta.id} />
+          <ReplayButton onReplay={handleReplay} />
           <motion.button
             className="dialkit-toolbar-add"
             onClick={handleAddPreset}
@@ -982,6 +1073,7 @@ const TimelineSection = memo(function TimelineSection({
       {open && (
         <div
           className="dialkit-timeline-body"
+          onWheel={handleTimelineWheel}
           onPointerDown={handleTrackPointerDown}
           onPointerMove={handleTrackPointerMove}
           onPointerUp={finishTrackScrub}
@@ -1025,12 +1117,23 @@ const TimelineSection = memo(function TimelineSection({
                 viewEnd={viewEnd}
                 laneWidth={laneWidth}
                 rulerRef={laneAreaRef}
-                headerClearStart={flagClearRange.start}
-                headerClearEnd={flagClearRange.end}
                 onResetView={resetView}
               />
             )}
           </div>
+          {zoom > 1 && (
+            <div className="dialkit-timeline-scroll-row">
+              <div className="dialkit-timeline-label" />
+              <div
+                ref={horizontalScrollRef}
+                className="dialkit-timeline-horizontal-scroll"
+                onScroll={handleHorizontalScroll}
+                aria-label="Timeline horizontal scroll"
+              >
+                <div style={{ width: laneWidth * zoom }} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
