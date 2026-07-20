@@ -413,6 +413,7 @@ export const Slider = defineComponent({
             },
             onKeydown: handleInputKeydown,
             onBlur: handleInputSubmit,
+            onPointerdown: (event: PointerEvent) => event.stopPropagation(),
             onClick: (event: MouseEvent) => event.stopPropagation(),
             onMousedown: (event: MouseEvent) => event.stopPropagation(),
           })
@@ -426,6 +427,9 @@ export const Slider = defineComponent({
               isValueHovered.value = false;
             },
             onClick: handleValueClick,
+            onPointerdown: (event: PointerEvent) => {
+              if (isValueEditable.value) event.stopPropagation();
+            },
             onMousedown: (event: MouseEvent) => {
               if (isValueEditable.value) event.stopPropagation();
             },

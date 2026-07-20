@@ -408,6 +408,7 @@ export function Slider(props: SliderProps) {
             onInput={(e) => setInputValue(e.currentTarget.value)}
             onKeyDown={handleInputKeyDown}
             onBlur={handleInputSubmit}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           />
@@ -418,6 +419,7 @@ export function Slider(props: SliderProps) {
             onMouseEnter={() => setIsValueHovered(true)}
             onMouseLeave={() => setIsValueHovered(false)}
             onClick={handleValueClick}
+            onPointerDown={(e) => isValueEditable() && e.stopPropagation()}
             onMouseDown={(e) => isValueEditable() && e.stopPropagation()}
             style={{ cursor: isValueEditable() ? 'text' : 'default' }}
           >

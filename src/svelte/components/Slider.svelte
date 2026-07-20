@@ -312,6 +312,7 @@
           }
         }}
         onblur={handleInputSubmit}
+        onpointerdown={(e) => e.stopPropagation()}
         onclick={(e) => e.stopPropagation()}
         onmousedown={(e) => e.stopPropagation()}
       />
@@ -322,6 +323,7 @@
         onmouseenter={() => (isValueHovered = true)}
         onmouseleave={() => (isValueHovered = false)}
         onclick={handleValueClick}
+        onpointerdown={(e) => isValueEditable && e.stopPropagation()}
         onmousedown={(e) => isValueEditable && e.stopPropagation()}
         style:cursor={isValueEditable ? 'text' : 'default'}
       >
