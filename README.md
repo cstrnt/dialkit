@@ -1,4 +1,4 @@
-# dialkit v1.4.3
+# dialkit v1.4.4
 
 <img src="https://joshpuckett.me/images/dialkit.png" width="100%" />
 
@@ -20,8 +20,8 @@ npm install dialkit motion
 
 ```tsx
 // layout.tsx
-import { DialRoot } from 'dialkit';
-import 'dialkit/styles.css';
+import { DialRoot } from "dialkit";
+import "dialkit/styles.css";
 
 export default function Layout({ children }) {
   return (
@@ -37,23 +37,25 @@ export default function Layout({ children }) {
 
 ```tsx
 // component.tsx
-import { useDialKit } from 'dialkit';
+import { useDialKit } from "dialkit";
 
 function Card() {
-  const p = useDialKit('Card', {
+  const p = useDialKit("Card", {
     blur: [24, 0, 100],
     scale: 1.2,
-    color: '#ff5500',
+    color: "#ff5500",
     visible: true,
   });
 
   return (
-    <div style={{
-      filter: `blur(${p.blur}px)`,
-      transform: `scale(${p.scale})`,
-      color: p.color,
-      opacity: p.visible ? 1 : 0,
-    }}>
+    <div
+      style={{
+        filter: `blur(${p.blur}px)`,
+        transform: `scale(${p.scale})`,
+        color: p.color,
+        opacity: p.visible ? 1 : 0,
+      }}
+    >
       ...
     </div>
   );
@@ -68,14 +70,14 @@ function Card() {
 const params = useDialKit(name, config, options?)
 ```
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Panel title displayed in the UI |
-| `config` | `DialConfig` | Parameter definitions (see Control Types below) |
-| `options.id` | `string` | Stable logical id for sharing values across remounts/pages |
-| `options.persist` | `DialKitPersistOptions` | Persist values to browser storage |
-| `options.collapsed` | `boolean` | Start this panel collapsed (see [Panel open state](#panel-open-state)) |
-| `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
+| Param               | Type                             | Description                                                                     |
+| ------------------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| `name`              | `string`                         | Panel title displayed in the UI                                                 |
+| `config`            | `DialConfig`                     | Parameter definitions (see Control Types below)                                 |
+| `options.id`        | `string`                         | Stable logical id for sharing values across remounts/pages                      |
+| `options.persist`   | `DialKitPersistOptions`          | Persist values to browser storage                                               |
+| `options.collapsed` | `boolean`                        | Start this panel collapsed (see [Panel open state](#panel-open-state))          |
+| `options.onAction`  | `(path: string) => void`         | Callback when action buttons are clicked                                        |
 | `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
@@ -88,17 +90,21 @@ By default, a DialKit panel is tied to the lifecycle of the component that calls
 
 ```tsx
 // dials/useOnboardingDials.ts
-import { useDialKit } from 'dialkit';
+import { useDialKit } from "dialkit";
 
 export function useOnboardingDials() {
-  return useDialKit('Onboarding', {
-    name: { type: 'text', default: 'Avery', placeholder: 'Name' },
-    avatarScale: [1, 0.6, 1.6, 0.01],
-    accent: { type: 'color', default: '#6C5CE7' },
-  }, {
-    id: 'onboarding',
-    persist: true,
-  });
+  return useDialKit(
+    "Onboarding",
+    {
+      name: { type: "text", default: "Avery", placeholder: "Name" },
+      avatarScale: [1, 0.6, 1.6, 0.01],
+      accent: { type: "color", default: "#6C5CE7" },
+    },
+    {
+      id: "onboarding",
+      persist: true,
+    },
+  );
 }
 ```
 
@@ -108,7 +114,7 @@ Use that helper anywhere the shared values are needed:
 function PageTwo() {
   const onboarding = useOnboardingDials();
 
-  const page = useDialKit('Page Two', {
+  const page = useDialKit("Page Two", {
     cardRadius: [16, 0, 64],
   });
 
@@ -127,11 +133,11 @@ When `PageTwo` is mounted, the single `<DialRoot />` shows both `Onboarding` and
 `persist: true` stores values, presets, and the active preset in `localStorage` using `dialkit:${id}` as the key. Use the object form to customize storage:
 
 ```tsx
-useDialKit('Onboarding', config, {
-  id: 'onboarding',
+useDialKit("Onboarding", config, {
+  id: "onboarding",
   persist: {
-    key: 'my-app:onboarding-dials',
-    storage: 'sessionStorage',
+    key: "my-app:onboarding-dials",
+    storage: "sessionStorage",
     presets: false,
   },
 });
@@ -146,13 +152,13 @@ The `id` string has no special format; it only needs to be reused wherever you w
 Use the controller API when your app code also needs to update DialKit values, such as reset buttons, URL sync, or app-defined preset buttons.
 
 ```tsx
-import { useDialKitController } from 'dialkit';
+import { useDialKitController } from "dialkit";
 
 function Card() {
-  const dial = useDialKitController('Card', {
+  const dial = useDialKitController("Card", {
     blur: [24, 0, 100],
     scale: 1.2,
-    color: '#ff5500',
+    color: "#ff5500",
     visible: true,
     shadow: {
       radius: [16, 0, 64],
@@ -161,22 +167,28 @@ function Card() {
 
   return (
     <>
-      <button onClick={() => dial.setValues({
-        blur: 48,
-        scale: 1,
-        shadow: { radius: 28 },
-      })}>
+      <button
+        onClick={() =>
+          dial.setValues({
+            blur: 48,
+            scale: 1,
+            shadow: { radius: 28 },
+          })
+        }
+      >
         Apply preset
       </button>
       <button onClick={() => dial.resetValues()}>Reset</button>
 
-      <div style={{
-        filter: `blur(${dial.values.blur}px)`,
-        transform: `scale(${dial.values.scale})`,
-        color: dial.values.color,
-        opacity: dial.values.visible ? 1 : 0,
-        borderRadius: dial.values.shadow.radius,
-      }}>
+      <div
+        style={{
+          filter: `blur(${dial.values.blur}px)`,
+          transform: `scale(${dial.values.scale})`,
+          color: dial.values.color,
+          opacity: dial.values.visible ? 1 : 0,
+          borderRadius: dial.values.shadow.radius,
+        }}
+      >
         ...
       </div>
     </>
@@ -186,13 +198,13 @@ function Card() {
 
 Controller methods:
 
-| Method | Description |
-|--------|-------------|
-| `values` | The same live resolved values returned by `useDialKit` |
-| `setValue(path, value)` | Updates one control by dot path, like `'shadow.radius'` |
-| `setValues(values)` | Updates multiple controls with a typed nested partial object |
-| `resetValues()` | Restores the current config defaults and clears the active preset |
-| `getValues()` | Reads the latest resolved values outside render callbacks |
+| Method                  | Description                                                       |
+| ----------------------- | ----------------------------------------------------------------- |
+| `values`                | The same live resolved values returned by `useDialKit`            |
+| `setValue(path, value)` | Updates one control by dot path, like `'shadow.radius'`           |
+| `setValues(values)`     | Updates multiple controls with a typed nested partial object      |
+| `resetValues()`         | Restores the current config defaults and clears the active preset |
+| `getValues()`           | Reads the latest resolved values outside render callbacks         |
 
 Programmatic updates use the same state as panel edits. If a saved preset is active, updates are saved into that preset; otherwise they update the base "Version 1" values. Action controls are triggers, so they are not set by `setValues`.
 
@@ -205,28 +217,33 @@ Programmatic updates use the same state as panel edits. If a saved preset is act
 Numbers create sliders. There are three ways to define them:
 
 **Explicit range** — `[default, min, max]`:
+
 ```tsx
-blur: [24, 0, 100]
+blur: [24, 0, 100];
 ```
 
 **Explicit range + step** — `[default, min, max, step]`:
+
 ```tsx
-blur: [24, 0, 100, 5]    // snaps in increments of 5
+blur: [24, 0, 100, 5]; // snaps in increments of 5
 ```
+
 When `step` is omitted, it's inferred from the range (see table below).
 
 **Auto-inferred** — bare number:
+
 ```tsx
-scale: 1.2
+scale: 1.2;
 ```
+
 A single number auto-infers a reasonable min, max, and step:
 
-| Value range | Inferred min/max | Step |
-|-------------|-----------------|------|
-| 0–1 | 0 to 1 | 0.01 |
-| 0–10 | 0 to value &times; 3 | 0.1 |
-| 0–100 | 0 to value &times; 3 | 1 |
-| 100+ | 0 to value &times; 3 | 10 |
+| Value range | Inferred min/max     | Step |
+| ----------- | -------------------- | ---- |
+| 0–1         | 0 to 1               | 0.01 |
+| 0–10        | 0 to value &times; 3 | 0.1  |
+| 0–100       | 0 to value &times; 3 | 1    |
+| 100+        | 0 to value &times; 3 | 10   |
 
 **Returns:** `number`
 
@@ -235,8 +252,8 @@ Sliders support click-to-snap (with spring animation), drag with rubber-band ove
 ### Toggle
 
 ```tsx
-enabled: true
-darkMode: false
+enabled: true;
+darkMode: false;
 ```
 
 Booleans create an Off/On segmented control.
@@ -311,12 +328,12 @@ Creates a visual spring editor with a live animation curve preview. The editor s
 The returned config object is passed directly to Motion's `transition` prop:
 
 ```tsx
-const p = useDialKit('Card', {
-  spring: { type: 'spring', visualDuration: 0.5, bounce: 0.04 },
+const p = useDialKit("Card", {
+  spring: { type: "spring", visualDuration: 0.5, bounce: 0.04 },
   x: [0, -200, 200],
 });
 
-<motion.div animate={{ x: p.x }} transition={p.spring} />
+<motion.div animate={{ x: p.x }} transition={p.spring} />;
 ```
 
 **Returns:** `SpringConfig` (pass directly to Motion)
@@ -324,15 +341,19 @@ const p = useDialKit('Card', {
 ### Action
 
 ```tsx
-const p = useDialKit('Controls', {
-  shuffle: { type: 'action' },
-  reset: { type: 'action', label: 'Reset All' },
-}, {
-  onAction: (path) => {
-    if (path === 'shuffle') shuffleItems();
-    if (path === 'reset') resetToDefaults();
+const p = useDialKit(
+  "Controls",
+  {
+    shuffle: { type: "action" },
+    reset: { type: "action", label: "Reset All" },
   },
-});
+  {
+    onAction: (path) => {
+      if (path === "shuffle") shuffleItems();
+      if (path === "reset") resetToDefaults();
+    },
+  },
+);
 ```
 
 Action buttons trigger callbacks without storing any value. The `label` defaults to the formatted key name (camelCase becomes Title Case). Multiple adjacent actions are grouped vertically.
@@ -369,8 +390,8 @@ DialKit also supports dynamic config updates. If your config shape, defaults, op
 Dynamic configs work with both inline objects and memoized configs — no special consumer action needed:
 
 ```tsx
-const values = useDialKit('Controls', {
-  style: { type: 'select', options: dynamicOptions },
+const values = useDialKit("Controls", {
+  style: { type: "select", options: dynamicOptions },
 });
 ```
 
@@ -381,7 +402,7 @@ const values = useDialKit('Controls', {
 Panels are open by default. Pass `collapsed: true` to start one collapsed:
 
 ```tsx
-const params = useDialKit('Stage', config, { id: 'stage', collapsed: true });
+const params = useDialKit("Stage", config, { id: "stage", collapsed: true });
 ```
 
 The same option exists on `createDialKit` in the Solid, Svelte, and Vue adapters.
@@ -389,19 +410,19 @@ The same option exists on `createDialKit` in the Solid, Svelte, and Vue adapters
 Open state lives in `DialStore`, so you can drive it from anywhere:
 
 ```tsx
-import { DialStore } from 'dialkit';
+import { DialStore } from "dialkit";
 
-DialStore.setPanelOpen('stage', false);   // collapse
-DialStore.setPanelOpen('stage', true);    // expand
-DialStore.togglePanelOpen('stage');
-DialStore.isPanelOpen('stage');           // boolean
+DialStore.setPanelOpen("stage", false); // collapse
+DialStore.setPanelOpen("stage", true); // expand
+DialStore.togglePanelOpen("stage");
+DialStore.isPanelOpen("stage"); // boolean
 ```
 
 These take the panel id — the `id` you passed to `useDialKit`, or the generated
 `${name}-${n}` when you didn't.
 
 Open state is in-memory only. It is never persisted, so a reload returns every
-panel to its configured default. To start a *folder* inside a panel collapsed,
+panel to its configured default. To start a _folder_ inside a panel collapsed,
 use the `_collapsed` config key described above.
 
 ---
@@ -412,14 +433,14 @@ use the `_collapsed` config key described above.
 <DialRoot position="top-right" />
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `position` | `'top-right' \| 'top-left' \| 'bottom-right' \| 'bottom-left'` | `'top-right'` |
-| `defaultOpen` | `boolean` | `true` |
-| `mode` | `'popover' \| 'inline'` | `'popover'` |
-| `theme` | `'system' \| 'light' \| 'dark'` | `'system'` |
-| `productionEnabled` | `boolean` | `false` in production, `true` otherwise |
-| `onOpenChange` | `(open: boolean) => void` | `undefined` |
+| Prop                | Type                                                           | Default                                 |
+| ------------------- | -------------------------------------------------------------- | --------------------------------------- |
+| `position`          | `'top-right' \| 'top-left' \| 'bottom-right' \| 'bottom-left'` | `'top-right'`                           |
+| `defaultOpen`       | `boolean`                                                      | `true`                                  |
+| `mode`              | `'popover' \| 'inline'`                                        | `'popover'`                             |
+| `theme`             | `'system' \| 'light' \| 'dark'`                                | `'system'`                              |
+| `productionEnabled` | `boolean`                                                      | `false` in production, `true` otherwise |
+| `onOpenChange`      | `(open: boolean) => void`                                      | `undefined`                             |
 
 Mount once at your app root. In the default `popover` mode, the panel renders via a portal on `document.body`. It collapses to a small icon button and expands to 280px wide on click.
 
@@ -429,19 +450,24 @@ If multiple `useDialKit` calls are registered under the same root, DialKit rende
 
 ```tsx
 function PhotoStack() {
-  const photo = useDialKit('Photo Stack', {
+  const photo = useDialKit("Photo Stack", {
     blur: [12, 0, 40],
     scale: [1, 0.5, 2],
   });
 
-  const stage = useDialKit('Stage', {
+  const stage = useDialKit("Stage", {
     pagePadding: [40, 16, 96],
-    background: '#ffffff',
+    background: "#ffffff",
   });
 
   return (
     <div style={{ padding: stage.pagePadding, background: stage.background }}>
-      <img style={{ filter: `blur(${photo.blur}px)`, transform: `scale(${photo.scale})` }} />
+      <img
+        style={{
+          filter: `blur(${photo.blur}px)`,
+          transform: `scale(${photo.scale})`,
+        }}
+      />
     </div>
   );
 }
@@ -453,9 +479,9 @@ Use `onOpenChange` when you need to persist whether the floating panel is open o
 
 ```tsx
 <DialRoot
-  defaultOpen={localStorage.getItem('dialkit-open') !== '0'}
+  defaultOpen={localStorage.getItem("dialkit-open") !== "0"}
   onOpenChange={(open) => {
-    localStorage.setItem('dialkit-open', open ? '1' : '0');
+    localStorage.setItem("dialkit-open", open ? "1" : "0");
   }}
 />
 ```
@@ -475,20 +501,23 @@ In popover mode, the collapsed panel bubble can be dragged to any position on th
 Use `mode="inline"` to render DialKit directly in your layout instead of as a floating popover. The panel fills its container and scrolls internally, which is useful for embedding in a sidebar or resizable panel. Inline mode works across all frameworks:
 
 **React:**
+
 ```tsx
-<aside style={{ width: 300, height: '100vh', overflow: 'hidden' }}>
+<aside style={{ width: 300, height: "100vh", overflow: "hidden" }}>
   <DialRoot mode="inline" />
 </aside>
 ```
 
 **Solid:**
+
 ```tsx
-<aside style={{ width: '300px', height: '100vh', overflow: 'hidden' }}>
+<aside style={{ width: "300px", height: "100vh", overflow: "hidden" }}>
   <DialRoot mode="inline" />
 </aside>
 ```
 
 **Svelte:**
+
 ```svelte
 <aside style:width="300px" style:height="100vh" style:overflow="hidden">
   <DialRoot mode="inline" />
@@ -513,63 +542,67 @@ When the panel is open, the toolbar provides:
 Assign keyboard shortcuts to controls so you can adjust values without touching the panel. Pass a `shortcuts` map in the options object:
 
 ```tsx
-const p = useDialKit('Card', {
-  blur: [24, 0, 100],
-  scale: 1.2,
-  opacity: [1, 0, 1],
-  borderRadius: [16, 0, 64],
-  darkMode: true,
-  shadow: {
-    blur: [10, 0, 50],
+const p = useDialKit(
+  "Card",
+  {
+    blur: [24, 0, 100],
+    scale: 1.2,
+    opacity: [1, 0, 1],
+    borderRadius: [16, 0, 64],
+    darkMode: true,
+    shadow: {
+      blur: [10, 0, 50],
+    },
   },
-}, {
-  shortcuts: {
-    blur:          { key: 'b', mode: 'fine' },                          // B+Scroll
-    scale:         { key: 's', interaction: 'drag', mode: 'coarse' },   // S+Drag
-    opacity:       { key: 'o', interaction: 'move' },                   // O+Move
-    borderRadius:  { interaction: 'scroll-only' },                      // Scroll (no key)
-    darkMode:      { key: 'm' },                                        // press M
-    'shadow.blur': { key: 'd', mode: 'fine' },                          // D+Scroll
+  {
+    shortcuts: {
+      blur: { key: "b", mode: "fine" }, // B+Scroll
+      scale: { key: "s", interaction: "drag", mode: "coarse" }, // S+Drag
+      opacity: { key: "o", interaction: "move" }, // O+Move
+      borderRadius: { interaction: "scroll-only" }, // Scroll (no key)
+      darkMode: { key: "m" }, // press M
+      "shadow.blur": { key: "d", mode: "fine" }, // D+Scroll
+    },
   },
-});
+);
 ```
 
 ### ShortcutConfig
 
 ```tsx
 type ShortcutConfig = {
-  key?: string;                                       // trigger key (e.g. 'b', 's') — optional for scroll-only
-  modifier?: 'alt' | 'shift' | 'meta';               // optional modifier key
-  mode?: 'fine' | 'normal' | 'coarse';               // precision level (default: 'normal')
-  interaction?: 'scroll' | 'drag' | 'move' | 'scroll-only'; // input method (default: 'scroll')
+  key?: string; // trigger key (e.g. 'b', 's') — optional for scroll-only
+  modifier?: "alt" | "shift" | "meta"; // optional modifier key
+  mode?: "fine" | "normal" | "coarse"; // precision level (default: 'normal')
+  interaction?: "scroll" | "drag" | "move" | "scroll-only"; // input method (default: 'scroll')
 };
 ```
 
 ### Interaction types
 
-| Interaction | Description | Example pill |
-|-------------|-------------|-------------|
-| `scroll` | Hold key + scroll wheel to adjust (default) | `B+Scroll` |
-| `drag` | Hold key + click and drag horizontally | `S+Drag` |
-| `move` | Hold key + move mouse (no click needed) | `O+Move` |
-| `scroll-only` | Just scroll anywhere, no key needed | `Scroll` |
+| Interaction   | Description                                 | Example pill |
+| ------------- | ------------------------------------------- | ------------ |
+| `scroll`      | Hold key + scroll wheel to adjust (default) | `B+Scroll`   |
+| `drag`        | Hold key + click and drag horizontally      | `S+Drag`     |
+| `move`        | Hold key + move mouse (no click needed)     | `O+Move`     |
+| `scroll-only` | Just scroll anywhere, no key needed         | `Scroll`     |
 
 ### Supported controls
 
-| Control | Interactions | Description |
-|---------|-------------|-------------|
+| Control    | Interactions                            | Description                           |
+| ---------- | --------------------------------------- | ------------------------------------- |
 | **Slider** | `scroll`, `drag`, `move`, `scroll-only` | Adjust value with chosen input method |
-| **Toggle** | key press | Press the assigned key to flip on/off |
+| **Toggle** | key press                               | Press the assigned key to flip on/off |
 
 ### Precision modes
 
 For sliders, the `mode` controls how much each scroll tick or drag pixel changes the value:
 
-| Mode | Step multiplier | Use case |
-|------|----------------|----------|
-| `fine` | step &divide; 10 | Precision tweaking |
-| `normal` | step &times; 1 | Default behavior |
-| `coarse` | step &times; 10 | Big sweeps |
+| Mode     | Step multiplier  | Use case           |
+| -------- | ---------------- | ------------------ |
+| `fine`   | step &divide; 10 | Precision tweaking |
+| `normal` | step &times; 1   | Default behavior   |
+| `coarse` | step &times; 10  | Big sweeps         |
 
 ### Nested paths
 
@@ -593,50 +626,62 @@ Shortcuts are automatically disabled when a text input is focused.
 ## Full Example
 
 ```tsx
-import { useDialKit } from 'dialkit';
-import { motion } from 'motion/react';
+import { useDialKit } from "dialkit";
+import { motion } from "motion/react";
 
 function PhotoStack() {
-  const p = useDialKit('Photo Stack', {
-    // Text inputs
-    title: 'Japan',
-    subtitle: { type: 'text', default: 'December 2025', placeholder: 'Enter subtitle...' },
+  const p = useDialKit(
+    "Photo Stack",
+    {
+      // Text inputs
+      title: "Japan",
+      subtitle: {
+        type: "text",
+        default: "December 2025",
+        placeholder: "Enter subtitle...",
+      },
 
-    // Color pickers
-    accentColor: '#c41e3a',
-    shadowTint: { type: 'color', default: '#000000' },
+      // Color pickers
+      accentColor: "#c41e3a",
+      shadowTint: { type: "color", default: "#000000" },
 
-    // Select dropdown
-    layout: { type: 'select', options: ['stack', 'fan', 'grid'], default: 'stack' },
+      // Select dropdown
+      layout: {
+        type: "select",
+        options: ["stack", "fan", "grid"],
+        default: "stack",
+      },
 
-    // Grouped sliders in a folder
-    backPhoto: {
-      offsetX: [239, 0, 400],
-      offsetY: [0, 0, 150],
-      scale: [0.7, 0.5, 0.95],
-      overlayOpacity: [0.6, 0, 1],
+      // Grouped sliders in a folder
+      backPhoto: {
+        offsetX: [239, 0, 400],
+        offsetY: [0, 0, 150],
+        scale: [0.7, 0.5, 0.95],
+        overlayOpacity: [0.6, 0, 1],
+      },
+
+      // Spring config for Motion
+      transitionSpring: { type: "spring", visualDuration: 0.5, bounce: 0.04 },
+
+      // Toggle
+      darkMode: false,
+
+      // Action buttons
+      next: { type: "action" },
+      previous: { type: "action" },
     },
-
-    // Spring config for Motion
-    transitionSpring: { type: 'spring', visualDuration: 0.5, bounce: 0.04 },
-
-    // Toggle
-    darkMode: false,
-
-    // Action buttons
-    next: { type: 'action' },
-    previous: { type: 'action' },
-  }, {
-    shortcuts: {
-      'backPhoto.offsetX': { key: 'x', interaction: 'drag', mode: 'coarse' },
-      'backPhoto.scale': { key: 's', interaction: 'move', mode: 'fine' },
-      darkMode: { key: 'm' },
+    {
+      shortcuts: {
+        "backPhoto.offsetX": { key: "x", interaction: "drag", mode: "coarse" },
+        "backPhoto.scale": { key: "s", interaction: "move", mode: "fine" },
+        darkMode: { key: "m" },
+      },
+      onAction: (action) => {
+        if (action === "next") goNext();
+        if (action === "previous") goPrevious();
+      },
     },
-    onAction: (action) => {
-      if (action === 'next') goNext();
-      if (action === 'previous') goPrevious();
-    },
-  });
+  );
 
   return (
     <motion.div
@@ -662,19 +707,19 @@ The animation's structure stays in code. The timeline editor adjusts its propert
 Timeline is available in React, Solid, Svelte, and Vue. Every adapter uses the same framework-neutral timeline core and store, while lifecycle and rendering stay native to its framework.
 
 ```tsx
-import { useDialTimeline, DialTimeline } from 'dialkit';
-import 'dialkit/styles.css';
+import { useDialTimeline, DialTimeline } from "dialkit";
+import "dialkit/styles.css";
 
 function Hero() {
   const hero = useDialTimeline(
-    'Hero',
+    "Hero",
     {
       entrance: {
         at: 0,
         duration: 0.6,
         from: { y: 32, opacity: 0 },
         to: { y: 0, opacity: 1 },
-        transition: { type: 'spring', bounce: 0.2 },
+        transition: { type: "spring", bounce: 0.2 },
       },
       idle: {
         at: 0.8,
@@ -686,7 +731,7 @@ function Hero() {
         ],
       },
     },
-    { loop: { from: 0.8 } }
+    { loop: { from: 0.8 } },
   );
 
   const entrance = hero.entrance.current;
@@ -694,10 +739,12 @@ function Hero() {
 
   return (
     <>
-      <h1 style={{
-        opacity: entrance.opacity,
-        transform: `translateY(${entrance.y + idle.y}px)`,
-      }}>
+      <h1
+        style={{
+          opacity: entrance.opacity,
+          transform: `translateY(${entrance.y + idle.y}px)`,
+        }}
+      >
         Ship the moment.
       </h1>
       <DialTimeline />
@@ -710,12 +757,12 @@ Each named entry is a clip and appears as one row in the timeline. During author
 
 The framework entry points expose the same config, values, transport, and `<DialTimeline />` dock:
 
-| Framework | Import | Timeline function | Read returned values |
-|-----------|--------|-------------------|----------------------|
-| React | `dialkit` | `useDialTimeline` | `timeline.card.current` |
-| Solid | `dialkit/solid` | `createDialTimeline` | `timeline().card.current` |
-| Svelte 5 | `dialkit/svelte` | `createDialTimeline` | `timeline.card.current` |
-| Vue 3 | `dialkit/vue` | `useDialTimeline` | `timeline.value.card.current` in script; auto-unwrapped in templates |
+| Framework | Import           | Timeline function    | Read returned values                                                 |
+| --------- | ---------------- | -------------------- | -------------------------------------------------------------------- |
+| React     | `dialkit`        | `useDialTimeline`    | `timeline.card.current`                                              |
+| Solid     | `dialkit/solid`  | `createDialTimeline` | `timeline().card.current`                                            |
+| Svelte 5  | `dialkit/svelte` | `createDialTimeline` | `timeline.card.current`                                              |
+| Vue 3     | `dialkit/vue`    | `useDialTimeline`    | `timeline.value.card.current` in script; auto-unwrapped in templates |
 
 ### Timeline function
 
@@ -724,29 +771,29 @@ const tl = useDialTimeline(name, config, options?)
 // Solid/Svelte: createDialTimeline(name, config, options?)
 ```
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Timeline title displayed in the dock |
-| `config` | `TimelineConfig` | Clip definitions plus an optional top-level `duration` |
-| `options.id` | `string` | Stable logical id, same semantics as `useDialKit` |
-| `options.persist` | `DialKitPersistOptions` | Persist timing edits to browser storage |
-| `options.autoplay` | `boolean` | Start playing on mount. Default `true` |
-| `options.loop` | `boolean \| { from: number }` | Wrap the playhead when it reaches the end (see [Looping](#looping)) |
+| Param              | Type                          | Description                                                         |
+| ------------------ | ----------------------------- | ------------------------------------------------------------------- |
+| `name`             | `string`                      | Timeline title displayed in the dock                                |
+| `config`           | `TimelineConfig`              | Clip definitions plus an optional top-level `duration`              |
+| `options.id`       | `string`                      | Stable logical id, same semantics as `useDialKit`                   |
+| `options.persist`  | `DialKitPersistOptions`       | Persist timing edits to browser storage                             |
+| `options.autoplay` | `boolean`                     | Start playing on mount. Default `true`                              |
+| `options.loop`     | `boolean \| { from: number }` | Wrap the playhead when it reaches the end (see [Looping](#looping)) |
 
 Clip timing lives in the same store as panel values, so presets, persistence, reset, and Copy all work on timing data with no extra wiring.
 
 The returned object combines the transport with one entry per clip:
 
 ```tsx
-tl.time        // playhead in seconds
-tl.playing     // boolean
-tl.duration    // timeline length in seconds
-tl.play()      // resume (restarts if parked at the end)
-tl.pause()
-tl.replay()    // seek to 0 and play
-tl.seek(1.2)   // move the playhead (pins the deterministic first-pass state)
+tl.time; // playhead in seconds
+tl.playing; // boolean
+tl.duration; // timeline length in seconds
+tl.play(); // resume (restarts if parked at the end)
+tl.pause();
+tl.replay(); // seek to 0 and play
+tl.seek(1.2); // move the playhead (pins the deterministic first-pass state)
 
-tl.headline    // TimelineClipValues for the "headline" clip
+tl.headline; // TimelineClipValues for the "headline" clip
 ```
 
 `time`, `playing`, `duration`, `play`, `pause`, `replay`, and `seek` are reserved — a clip with one of those names is skipped with a console warning.
@@ -774,7 +821,7 @@ card: {
 
 - **`from` / `to`** accept any normal DialKit leaf values — numbers, hex colors — and become editable controls in the clip's popover. Bare numbers get property-aware slider ranges (`x`/`y` ±100, `rotate` ±180, `scale` 0–2, `opacity` 0–1, and so on), expanded to include your actual endpoints.
 - **`transition`** is a spring or easing config, exactly as in the panel's spring editor. Clips with `from`/`to` and no `transition` animate with a default spring (`{ type: 'spring', bounce: 0.2 }`).
-- **The bar owns the duration.** Time-based springs and easings stretch to the bar: resize the clip and the curve retimes. Physics springs (`stiffness`/`damping`/`mass`) work the other way — the duration is *derived* from their settle time, the bar shows `~0.62s`, and it can't be resized (change the physics instead).
+- **The bar owns the duration.** Time-based springs and easings stretch to the bar: resize the clip and the curve retimes. Physics springs (`stiffness`/`damping`/`mass`) work the other way — the duration is _derived_ from their settle time, the bar shows `~0.62s`, and it can't be resized (change the physics instead).
 - **`duration` may be omitted** — it defaults to the easing's duration or the spring's settle time; a `from`/`to` clip with no `transition` gets the default spring's settle time.
 
 Config mistakes warn in the console instead of failing silently: an entry missing `at`, conflicting clip shapes (`steps` + `to`, `props` + `from`), or a sequence property with no starting value.
@@ -792,21 +839,21 @@ shine: { at: 2.7, duration: 0.7 },
 
 Each clip on the returned object is a `TimelineClipValues`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `at` | `number` | Clip start in seconds — live, reflects dock edits |
-| `duration` | `number` | Effective duration — the bar length |
-| `loop` | `'off' \| 'repeat'` | Effective loop mode |
-| `started` | `boolean` | Playhead is at or past the clip start |
-| `active` | `boolean` | Playhead is inside the clip (any cycle, for looping clips) |
-| `done` | `boolean` | Playhead is past the clip end (past the timeline end, for looping clips) |
-| `progress` | `number` | 0–1 position within the clip — a sawtooth per cycle for looping clips |
-| `step` | `number` | Index of the leg under the playhead (sequence clips only) |
-| `from` / `to` | `object` | Resolved endpoint values (`to` is the final merged state for sequences) |
-| `animate` | `object` | `to` once the clip has started, `from` before |
-| `transition` | `TransitionConfig` | Motion-ready curve, duration driven by the bar (single-curve clips only) |
-| `css` | `TimelineClipCss` | `transitionDuration` + `transitionTimingFunction` (single-curve clips only) |
-| `current` | `object` | Values interpolated through the clip's curves at the playhead |
+| Field         | Type                | Description                                                                 |
+| ------------- | ------------------- | --------------------------------------------------------------------------- |
+| `at`          | `number`            | Clip start in seconds — live, reflects dock edits                           |
+| `duration`    | `number`            | Effective duration — the bar length                                         |
+| `loop`        | `'off' \| 'repeat'` | Effective loop mode                                                         |
+| `started`     | `boolean`           | Playhead is at or past the clip start                                       |
+| `active`      | `boolean`           | Playhead is inside the clip (any cycle, for looping clips)                  |
+| `done`        | `boolean`           | Playhead is past the clip end (past the timeline end, for looping clips)    |
+| `progress`    | `number`            | 0–1 position within the clip — a sawtooth per cycle for looping clips       |
+| `step`        | `number`            | Index of the leg under the playhead (sequence clips only)                   |
+| `from` / `to` | `object`            | Resolved endpoint values (`to` is the final merged state for sequences)     |
+| `animate`     | `object`            | `to` once the clip has started, `from` before                               |
+| `transition`  | `TransitionConfig`  | Motion-ready curve, duration driven by the bar (single-curve clips only)    |
+| `css`         | `TimelineClipCss`   | `transitionDuration` + `transitionTimingFunction` (single-curve clips only) |
+| `current`     | `object`            | Values interpolated through the clip's curves at the playhead               |
 
 ### Recommended workflow: preview, copy, replace
 
@@ -825,10 +872,12 @@ There are three ways to bind a clip while authoring:
 **1. `current` — recommended for tuning.** Bind styles directly; the element sits at DialKit's sampled state at all times, giving you true scrubbing. DialKit remains the renderer until you replace this binding with your production animation.
 
 ```tsx
-<div style={{
-  opacity: tl.card.current.opacity,
-  transform: `translateY(${tl.card.current.y}px) scale(${tl.card.current.scale})`,
-}} />
+<div
+  style={{
+    opacity: tl.card.current.opacity,
+    transform: `translateY(${tl.card.current.y}px) scale(${tl.card.current.scale})`,
+  }}
+/>
 ```
 
 **2. `animate` + `transition` — real Motion during authoring.** The clip start flips `animate` from `from` to `to`, so Motion runs the actual curve. The tradeoff is that timeline scrubbing snaps between endpoints instead of showing intermediate states.
@@ -840,12 +889,14 @@ There are three ways to bind a clip while authoring:
 **3. `animate` + `css` — native CSS during authoring.** Same endpoint flip, using a CSS transition. Easing curves map exactly; springs are approximated with an overshoot bezier, and scrubbing still snaps between endpoints.
 
 ```tsx
-<div style={{
-  opacity: tl.card.animate.opacity,
-  transform: `translateY(${tl.card.animate.y}px)`,
-  transitionProperty: 'transform, opacity',
-  ...tl.card.css,
-}} />
+<div
+  style={{
+    opacity: tl.card.animate.opacity,
+    transform: `translateY(${tl.card.animate.y}px)`,
+    transitionProperty: "transform, opacity",
+    ...tl.card.css,
+  }}
+/>
 ```
 
 ### Sequences — `steps`
@@ -874,7 +925,7 @@ path: {
 
 ### Property tracks — `props`
 
-When one element's properties need *independent* timing — different durations, different curves, offset phases — give each property a full track:
+When one element's properties need _independent_ timing — different durations, different curves, offset phases — give each property a full track:
 
 ```tsx
 float: {
@@ -911,15 +962,15 @@ Each track is a mini-clip: its own `from`/`to` or `steps`, `duration`, `transiti
 Nesting clips one level under a key groups them into a collapsible layer in the dock. Purely presentational — values nest the same way:
 
 ```tsx
-const tl = useDialTimeline('Compound', {
+const tl = useDialTimeline("Compound", {
   circle: {
-    path:  { at: 0, /* ... */ },
-    float: { at: 0, /* ... */ },
+    path: { at: 0 /* ... */ },
+    float: { at: 0 /* ... */ },
   },
 });
 
-tl.circle.path.current
-tl.circle.float.current
+tl.circle.path.current;
+tl.circle.float.current;
 ```
 
 ### Looping
@@ -928,11 +979,11 @@ There are two loop controls, and they compose:
 
 **Clip loop** — `loop: true` on a clip repeats its cycle from `at` until the timeline ends. The bar is one cycle, so dragging it longer slows the loop. Looping is code-defined rather than editable in the dock. There is no mirror mode — a loop that should return home (a bob, a pulse) is a sequence whose last leg lands back on the starting values, which also puts the loop seam at a natural zero-velocity point.
 
-**Timeline loop** — the `loop` option wraps the *playhead*:
+**Timeline loop** — the `loop` option wraps the _playhead_:
 
 ```tsx
-useDialTimeline('Hero', config, { loop: true });           // wrap to 0
-useDialTimeline('Hero', config, { loop: { from: 1.4 } });  // wrap to 1.4s
+useDialTimeline("Hero", config, { loop: true }); // wrap to 0
+useDialTimeline("Hero", config, { loop: { from: 1.4 } }); // wrap to 1.4s
 ```
 
 `{ from }` is the intro-then-idle pattern: clips before that time play exactly once, and looping clips inside the region keep cycling with continuous phase — no snap at the wrap. Scrubbing always pins the deterministic first-pass state.
@@ -940,9 +991,9 @@ useDialTimeline('Hero', config, { loop: { from: 1.4 } });  // wrap to 1.4s
 **Event-driven timelines** — pass `autoplay: false` and drive the transport from your app. The dock and your code share the same clock: click your real button, watch the playhead run, scrub back, tune, click again.
 
 ```tsx
-const toast = useDialTimeline('Toast', config, { autoplay: false });
+const toast = useDialTimeline("Toast", config, { autoplay: false });
 
-<button onClick={() => toast.replay()}>Save changes</button>
+<button onClick={() => toast.replay()}>Save changes</button>;
 ```
 
 ### Timeline duration
@@ -950,9 +1001,9 @@ const toast = useDialTimeline('Toast', config, { autoplay: false });
 The top-level `duration` is the minimum editing window. Omit it and DialKit initially infers an exact fit to the last clip's end. If a live edit—such as switching to a longer physics spring—would move content past that boundary, DialKit extends the timeline automatically. Set `duration` explicitly when you want deliberate slack; authored content is never clipped to fit it.
 
 ```tsx
-const tl = useDialTimeline('Hero', {
-  duration: 4,          // seconds; minimum window, inferred when omitted
-  headline: { at: 0.45, /* ... */ },
+const tl = useDialTimeline("Hero", {
+  duration: 4, // seconds; minimum window, inferred when omitted
+  headline: { at: 0.45 /* ... */ },
 });
 ```
 
@@ -964,14 +1015,14 @@ Mount once, anywhere. The dock renders fixed to the bottom of the screen via a p
 <DialTimeline theme="dark" />
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `theme` | `'system' \| 'light' \| 'dark'` | `'system'` |
-| `defaultVisible` | `boolean` | `true` |
-| `visible` | `boolean` | uncontrolled |
-| `onVisibilityChange` | `(visible: boolean) => void` | `undefined` |
-| `defaultOpen` | `boolean` | `true` |
-| `productionEnabled` | `boolean` | `false` in production, `true` otherwise |
+| Prop                 | Type                            | Default                                 |
+| -------------------- | ------------------------------- | --------------------------------------- |
+| `theme`              | `'system' \| 'light' \| 'dark'` | `'system'`                              |
+| `defaultVisible`     | `boolean`                       | `true`                                  |
+| `visible`            | `boolean`                       | uncontrolled                            |
+| `onVisibilityChange` | `(visible: boolean) => void`    | `undefined`                             |
+| `defaultOpen`        | `boolean`                       | `true`                                  |
+| `productionEnabled`  | `boolean`                       | `false` in production, `true` otherwise |
 
 Each section's toolbar has **Play/Pause**, **Add Version**, a version selector, **Copy**, and a collapse chevron. The collapsed toolbar stays playable and keeps its full-range overview scrubber, so you can inspect the animation without opening the detailed tracks.
 
@@ -1007,8 +1058,8 @@ npm install dialkit solid-js
 
 ```tsx
 // App.tsx
-import { DialRoot } from 'dialkit/solid';
-import 'dialkit/styles.css';
+import { DialRoot } from "dialkit/solid";
+import "dialkit/styles.css";
 
 export default function App() {
   return (
@@ -1022,23 +1073,25 @@ export default function App() {
 
 ```tsx
 // component.tsx
-import { createDialKit } from 'dialkit/solid';
+import { createDialKit } from "dialkit/solid";
 
 function Card() {
-  const params = createDialKit('Card', {
+  const params = createDialKit("Card", {
     blur: [24, 0, 100],
     scale: 1.2,
-    color: '#ff5500',
+    color: "#ff5500",
     visible: true,
   });
 
   return (
-    <div style={{
-      filter: `blur(${params().blur}px)`,
-      transform: `scale(${params().scale})`,
-      color: params().color,
-      opacity: params().visible ? 1 : 0,
-    }}>
+    <div
+      style={{
+        filter: `blur(${params().blur}px)`,
+        transform: `scale(${params().scale})`,
+        color: params().color,
+        opacity: params().visible ? 1 : 0,
+      }}
+    >
       ...
     </div>
   );
@@ -1050,10 +1103,10 @@ function Card() {
 Solid timelines use the same accessor shape:
 
 ```tsx
-import { createDialTimeline, DialTimeline } from 'dialkit/solid';
+import { createDialTimeline, DialTimeline } from "dialkit/solid";
 
 function Hero() {
-  const timeline = createDialTimeline('Hero', {
+  const timeline = createDialTimeline("Hero", {
     entrance: {
       at: 0,
       duration: 0.6,
@@ -1062,19 +1115,21 @@ function Hero() {
     },
   });
 
-  return <>
-    <h1 style={{ opacity: timeline().entrance.current.opacity }}>Ship it.</h1>
-    <DialTimeline />
-  </>;
+  return (
+    <>
+      <h1 style={{ opacity: timeline().entrance.current.opacity }}>Ship it.</h1>
+      <DialTimeline />
+    </>
+  );
 }
 ```
 
 Use `createDialKitController` when Solid code needs to update values:
 
 ```tsx
-import { createDialKitController } from 'dialkit/solid';
+import { createDialKitController } from "dialkit/solid";
 
-const dial = createDialKitController('Card', {
+const dial = createDialKitController("Card", {
   blur: [24, 0, 100],
   shadow: { radius: [16, 0, 64] },
 });
@@ -1180,48 +1235,54 @@ npm install dialkit motion-v vue
 
 ```ts
 // main.ts
-import { createApp } from 'vue';
-import { DialRoot } from 'dialkit/vue';
-import 'dialkit/styles.css';
-import App from './App.vue';
+import { createApp } from "vue";
+import { DialRoot } from "dialkit/vue";
+import "dialkit/styles.css";
+import App from "./App.vue";
 
 const app = createApp(App);
-app.mount('#app');
+app.mount("#app");
 ```
 
 ```vue
 <!-- App.vue -->
 <script setup>
-import { DialRoot } from 'dialkit/vue';
-import Card from './Card.vue';
+import { DialRoot } from "dialkit/vue";
+import Card from "./Card.vue";
 </script>
 
 <template>
   <Card />
-  <DialRoot @open-change="(open) => localStorage.setItem('dialkit-open', open ? '1' : '0')" />
+  <DialRoot
+    @open-change="
+      (open) => localStorage.setItem('dialkit-open', open ? '1' : '0')
+    "
+  />
 </template>
 ```
 
 ```vue
 <!-- Card.vue -->
 <script setup>
-import { useDialKit } from 'dialkit/vue';
+import { useDialKit } from "dialkit/vue";
 
-const params = useDialKit('Card', {
+const params = useDialKit("Card", {
   blur: [24, 0, 100],
   scale: 1.2,
-  color: '#ff5500',
+  color: "#ff5500",
   visible: true,
 });
 </script>
 
 <template>
-  <div :style="{
-    filter: `blur(${params.blur}px)`,
-    transform: `scale(${params.scale})`,
-    color: params.color,
-    opacity: params.visible ? 1 : 0,
-  }">
+  <div
+    :style="{
+      filter: `blur(${params.blur}px)`,
+      transform: `scale(${params.scale})`,
+      color: params.color,
+      opacity: params.visible ? 1 : 0,
+    }"
+  >
     ...
   </div>
 </template>
@@ -1233,9 +1294,9 @@ Vue timelines return a computed ref, which templates unwrap automatically:
 
 ```vue
 <script setup>
-import { useDialTimeline, DialTimeline } from 'dialkit/vue';
+import { useDialTimeline, DialTimeline } from "dialkit/vue";
 
-const timeline = useDialTimeline('Hero', {
+const timeline = useDialTimeline("Hero", {
   entrance: {
     at: 0,
     duration: 0.6,
@@ -1255,18 +1316,25 @@ Use `useDialKitController` when Vue code needs to update values:
 
 ```vue
 <script setup>
-import { useDialKitController } from 'dialkit/vue';
+import { useDialKitController } from "dialkit/vue";
 
-const { values, setValues, resetValues } = useDialKitController('Card', {
+const { values, setValues, resetValues } = useDialKitController("Card", {
   blur: [24, 0, 100],
   shadow: { radius: [16, 0, 64] },
 });
 </script>
 
 <template>
-  <button @click="setValues({ blur: 48, shadow: { radius: 28 } })">Apply preset</button>
+  <button @click="setValues({ blur: 48, shadow: { radius: 28 } })">
+    Apply preset
+  </button>
   <button @click="resetValues()">Reset</button>
-  <div :style="{ filter: `blur(${values.blur}px)`, borderRadius: `${values.shadow.radius}px` }" />
+  <div
+    :style="{
+      filter: `blur(${values.blur}px)`,
+      borderRadius: `${values.shadow.radius}px`,
+    }"
+  />
 </template>
 ```
 
@@ -1295,7 +1363,7 @@ import type {
   ControlMeta,
   PanelConfig,
   Preset,
-} from 'dialkit';
+} from "dialkit";
 ```
 
 Timeline types are exported as well:
@@ -1316,7 +1384,7 @@ import type {
   DialTimelineValues,
   UseDialTimelineOptions,
   DialTimelineProps,
-} from 'dialkit';
+} from "dialkit";
 ```
 
 Return values are fully typed: `params.blur` infers as `number`, `params.color` as `string`, `params.spring` as `SpringConfig`, `params.shadow` as a nested object, etc. Timeline values are typed from the config shape too — `tl.card.current.y` infers as `number`, and `step` only exists on sequence clips.
