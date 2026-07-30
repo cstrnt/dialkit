@@ -7,7 +7,7 @@ export const Folder = defineComponent({
   props: {
     title: { type: String, required: true },
     defaultOpen: { type: Boolean, default: true },
-      open: { type: Boolean as unknown as PropType<boolean | undefined>, default: undefined },
+    open: { type: Boolean as unknown as PropType<boolean | undefined>, default: undefined },
     isRoot: { type: Boolean, default: false },
     inline: { type: Boolean, default: false },
     toolbar: {
